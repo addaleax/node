@@ -21,8 +21,7 @@ const stat = promisify(fs.stat);
 {
   const promise = stat('/dontexist');
   promise.catch(common.mustCall((error) => {
-    assert.strictEqual(error.message,
-                       "ENOENT: no such file or directory, stat '/dontexist'");
+    assert(error.message.includes('ENOENT: no such file or directory, stat'));
   }));
 }
 
