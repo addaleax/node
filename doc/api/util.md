@@ -441,6 +441,9 @@ will return its value, see [Custom promisified functions][].
 
 If `original` is declared as an `async function`, `original` itself is returned.
 
+If `original` calls its callback argument with more than 2 parameters, a
+Promise for an Array of those parameters is returned instead.
+
 ### Custom promisified functions
 
 Using the `util.promisify.custom` symbol one can override the return value of

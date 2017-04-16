@@ -43,3 +43,12 @@ const stat = promisify(fs.stat);
   assert.notStrictEqual(Object.getPrototypeOf(promisify(fn)),
                         Function.prototype);
 }
+
+{
+  function fn(callback) {
+    callback(null, 'foo', 'bar');
+  }
+  promisify(fn)().then(common.mustCall((value) => {
+    assert.deepStrictEqual(value, ['foo', 'bar']);
+  }));
+}
