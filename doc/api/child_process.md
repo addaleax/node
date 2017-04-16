@@ -212,6 +212,9 @@ child runs longer than `timeout` milliseconds.
 *Note: Unlike the exec(3) POSIX system call, `child_process.exec()` does not
 replace the existing process and uses a shell to execute the command.*
 
+If this method is invoked as its [`util.promisify()`][]ed version, it returns
+a Promise for an object with `stdout` and `stderr` properties.
+
 ### child_process.execFile(file[, args][, options][, callback])
 <!-- YAML
 added: v0.1.91
@@ -260,6 +263,9 @@ the output as UTF-8 and pass strings to the callback. The `encoding` option
 can be used to specify the character encoding used to decode the stdout and
 stderr output. If `encoding` is `'buffer'`, or an unrecognized character
 encoding, `Buffer` objects will be passed to the callback instead.
+
+If this method is invoked as its [`util.promisify()`][]ed version, it returns
+a Promise for an object with `stdout` and `stderr` properties.
 
 ### child_process.fork(modulePath[, args][, options])
 <!-- YAML
@@ -1264,3 +1270,4 @@ to `stdout` although there are only 4 characters.
 [`stdio`]: #child_process_options_stdio
 [synchronous counterparts]: #child_process_synchronous_process_creation
 [`Uint8Array`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Uint8Array
+[`util.promisify()`]: util.html#util_util_promisify_original
