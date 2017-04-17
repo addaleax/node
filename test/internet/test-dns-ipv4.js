@@ -6,6 +6,9 @@ const net = require('net');
 const util = require('util');
 const isIPv4 = net.isIPv4;
 
+// Crash the process on unhandled rejections.
+process.on('unhandledRejection', (err) => setImmediate(() => { throw err; }));
+
 let running = false;
 const queue = [];
 
