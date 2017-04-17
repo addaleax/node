@@ -149,7 +149,7 @@ If `callback` is not a function, a [`TypeError`][] will be thrown.
 const util = require('util');
 const setTimeoutPromise = util.promisify(setTimeout);
 
-setTimeout(40, 'foobar').then((value) => {
+setTimeoutPromise(40, 'foobar').then((value) => {
   // value === 'foobar' (passing values is optional)
   // This is executed after about 40 milliseconds.
 });
