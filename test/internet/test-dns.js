@@ -28,6 +28,9 @@ const isIPv4 = net.isIPv4;
 const isIPv6 = net.isIPv6;
 const util = require('util');
 
+// Crash the process on unhandled rejections.
+process.on('unhandledRejection', (err) => setImmediate(() => { throw err; }));
+
 let expected = 0;
 let completed = 0;
 let running = false;
