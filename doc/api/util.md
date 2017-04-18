@@ -103,7 +103,9 @@ Each placeholder token is replaced with the converted value from the
 corresponding argument. Supported placeholders are:
 
 * `%s` - String.
-* `%d` - Number (both integer and float).
+* `%d` - Number (integer or floating point value).
+* `%i` - Integer.
+* `%f` - Floating point value.
 * `%j` - JSON.  Replaced with the string `'[Circular]'` if the argument
 contains circular references.
 * `%%` - single percent sign (`'%'`). This does not consume an argument.
@@ -131,6 +133,13 @@ Each argument is converted to a string using `util.inspect()`.
 
 ```js
 util.format(1, 2, 3); // '1 2 3'
+```
+
+If only one argument is passed to `util.format()`, it is returned as it is
+without any formatting.
+
+```js
+util.format('%% %s'); // '%% %s'
 ```
 
 ## util.inherits(constructor, superConstructor)
@@ -388,6 +397,83 @@ console.log(arr); // logs the truncated array
 util.inspect.defaultOptions.maxArrayLength = null;
 console.log(arr); // logs the full array
 ```
+
+## util.promisify(original)
+<!-- YAML
+added: REPLACEME
+-->
+
+* `original` {Function}
+
+Takes a function following the common Node.js callback style, i.e. taking a
+`(err, value) => ...` callback as the last argument, and returns a version
+that returns promises.
+
+For example:
+
+```js
+const util = require('util');
+const fs = require('fs');
+
+const stat = util.promisify(fs.stat);
+stat('.').then((stats) => {
+  // Do something with `stats`
+}).catch((error) => {
+  // Handle the error.
+});
+```
+Or, equivalently using `async function`s:
+
+```js
+const util = require('util');
+const fs = require('fs');
+
+const stat = util.promisify(fs.stat);
+
+async function callStat() {
+  const stats = await stat('.');
+  console.log(`This directory is owned by ${stats.uid}`);
+}
+```
+
+If there is a `function[util.promisify.custom]` property present, `promisify`
+will return its value, see [Custom promisified functions][].
+
+If `original` is declared as an `async function`, `original` itself is returned.
+
+If `original` calls its callback argument with more than 2 parameters, a
+Promise for an Array of those parameters is returned instead.
+
+### Custom promisified functions
+
+Using the `util.promisify.custom` symbol one can override the return value of
+[`util.promisify()`][]:
+
+```js
+const util = require('util');
+
+function doSomething(foo, callback) {
+  // ...
+}
+
+doSomething[util.promisify.custom] = function(foo) {
+  return getPromiseSomehow();
+}
+
+const promisified = util.promisify(doSomething);
+console.log(promisified === doSomething[util.promisify.custom]);
+  // prints 'true'
+```
+
+### util.promisify.custom
+<!-- YAML
+added: REPLACEME
+-->
+
+* {symbol}
+
+A Symbol that can be used to declare custom promisified variants of functions,
+see [Custom promisified functions][].
 
 ## Deprecated APIs
 
@@ -865,8 +951,10 @@ Deprecated predecessor of `console.log`.
 [constructor]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/constructor
 [semantically incompatible]: https://github.com/nodejs/node/issues/4179
 [`util.inspect()`]: #util_util_inspect_object_options
+[`util.promisify()`]: #util_util_promisify_original
 [Customizing `util.inspect` colors]: #util_customizing_util_inspect_colors
 [Custom inspection functions on Objects]: #util_custom_inspection_functions_on_objects
+[Custom promisified functions]: #util_custom_promisified_functions
 [`Error`]: errors.html#errors_class_error
 [`console.log()`]: console.html#console_console_log_data_args
 [`console.error()`]: console.html#console_console_error_data_args

@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #include "string_bytes.h"
 
 #include "base64.h"
@@ -24,6 +45,8 @@ using v8::MaybeLocal;
 using v8::Object;
 using v8::String;
 using v8::Value;
+
+namespace {
 
 template <typename ResourceType, typename TypeName>
 class ExternString: public ResourceType {
@@ -120,6 +143,7 @@ MaybeLocal<String> ExternTwoByteString::NewExternal(
   return String::NewExternalTwoByte(isolate, h_str);
 }
 
+}  // anonymous namespace
 
 // supports regular and URL-safe base64
 const int8_t unbase64_table[256] =
@@ -161,15 +185,15 @@ static const int8_t unhex_table[256] =
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
   };
 
-#define unhex(x)                                                              \
-  static_cast<unsigned>(unhex_table[static_cast<uint8_t>(x)])
-
+static inline unsigned unhex(uint8_t x) {
+  return unhex_table[x];
+}
 
 template <typename TypeName>
-size_t hex_decode(char* buf,
-                  size_t len,
-                  const TypeName* src,
-                  const size_t srcLen) {
+static size_t hex_decode(char* buf,
+                         size_t len,
+                         const TypeName* src,
+                         const size_t srcLen) {
   size_t i;
   for (i = 0; i < len && i * 2 + 1 < srcLen; ++i) {
     unsigned a = unhex(src[i * 2 + 0]);

@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 /* eslint-disable required-modules */
 'use strict';
 const path = require('path');
@@ -14,6 +35,9 @@ const execSync = require('child_process').execSync;
 const testRoot = process.env.NODE_TEST_DIR ?
                    fs.realpathSync(process.env.NODE_TEST_DIR) : __dirname;
 
+const noop = () => {};
+
+exports.noop = noop;
 exports.fixturesDir = path.join(__dirname, 'fixtures');
 exports.tmpDirName = 'tmp';
 // PORT should match the definition in test/testpy/__init__.py.
@@ -240,28 +264,6 @@ exports.ddCommand = function(filename, kilobytes) {
 };
 
 
-exports.spawnCat = function(options) {
-  const spawn = require('child_process').spawn;
-
-  if (exports.isWindows) {
-    return spawn('more', [], options);
-  } else {
-    return spawn('cat', [], options);
-  }
-};
-
-
-exports.spawnSyncCat = function(options) {
-  const spawnSync = require('child_process').spawnSync;
-
-  if (exports.isWindows) {
-    return spawnSync('more', [], options);
-  } else {
-    return spawnSync('cat', [], options);
-  }
-};
-
-
 exports.spawnPwd = function(options) {
   const spawn = require('child_process').spawn;
 
@@ -402,7 +404,7 @@ process.on('exit', function() {
   if (!exports.globalCheck) return;
   const leaked = leakedGlobals();
   if (leaked.length > 0) {
-    fail(`Unexpected global(s) found: ${leaked.join(', ')}`);
+    assert.fail(`Unexpected global(s) found: ${leaked.join(', ')}`);
   }
 });
 
@@ -430,6 +432,13 @@ function runCallChecks(exitCode) {
 
 
 exports.mustCall = function(fn, expected) {
+  if (typeof fn === 'number') {
+    expected = fn;
+    fn = noop;
+  } else if (fn === undefined) {
+    fn = noop;
+  }
+
   if (expected === undefined)
     expected = 1;
   else if (typeof expected !== 'number')
@@ -498,14 +507,9 @@ exports.canCreateSymLink = function() {
   return true;
 };
 
-function fail(msg) {
-  assert.fail(null, null, msg);
-}
-exports.fail = fail;
-
 exports.mustNotCall = function(msg) {
   return function mustNotCall() {
-    fail(msg || 'function should not have been called');
+    assert.fail(msg || 'function should not have been called');
   };
 };
 
@@ -526,9 +530,9 @@ util.inherits(ArrayStream, stream.Stream);
 exports.ArrayStream = ArrayStream;
 ArrayStream.prototype.readable = true;
 ArrayStream.prototype.writable = true;
-ArrayStream.prototype.pause = function() {};
-ArrayStream.prototype.resume = function() {};
-ArrayStream.prototype.write = function() {};
+ArrayStream.prototype.pause = noop;
+ArrayStream.prototype.resume = noop;
+ArrayStream.prototype.write = noop;
 
 // Returns true if the exit code "exitCode" and/or signal name "signal"
 // represent the exit code and/or signal name of a node process that aborted,
@@ -618,7 +622,7 @@ exports.WPT = {
   },
   assert_array_equals: assert.deepStrictEqual,
   assert_unreached(desc) {
-    assert.fail(undefined, undefined, `Reached unreachable code: ${desc}`);
+    assert.fail(`Reached unreachable code: ${desc}`);
   }
 };
 
@@ -637,4 +641,37 @@ exports.expectsError = function expectsError({code, type, message}) {
     }
     return true;
   };
+};
+
+exports.skipIfInspectorDisabled = function skipIfInspectorDisabled() {
+  if (!exports.hasCrypto) {
+    exports.skip('missing ssl support so inspector is disabled');
+    process.exit(0);
+  }
+};
+
+const arrayBufferViews = [
+  Int8Array,
+  Uint8Array,
+  Uint8ClampedArray,
+  Int16Array,
+  Uint16Array,
+  Int32Array,
+  Uint32Array,
+  Float32Array,
+  Float64Array,
+  DataView
+];
+
+exports.getArrayBufferViews = function getArrayBufferViews(buf) {
+  const { buffer, byteOffset, byteLength } = buf;
+
+  const out = [];
+  for (const type of arrayBufferViews) {
+    const { BYTES_PER_ELEMENT = 1 } = type;
+    if (byteLength % BYTES_PER_ELEMENT === 0) {
+      out.push(new type(buffer, byteOffset, byteLength / BYTES_PER_ELEMENT));
+    }
+  }
+  return out;
 };

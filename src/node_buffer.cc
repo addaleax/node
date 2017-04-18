@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #include "node.h"
 #include "node_buffer.h"
 
@@ -49,6 +70,7 @@ namespace Buffer {
 
 using v8::ArrayBuffer;
 using v8::ArrayBufferCreationMode;
+using v8::ArrayBufferView;
 using v8::Context;
 using v8::EscapableHandleScope;
 using v8::FunctionCallbackInfo;
@@ -64,6 +86,8 @@ using v8::Uint32Array;
 using v8::Uint8Array;
 using v8::Value;
 using v8::WeakCallbackInfo;
+
+namespace {
 
 class CallbackInfo {
  public:
@@ -148,7 +172,8 @@ void CallbackInfo::WeakCallback(Isolate* isolate) {
 // Parse index for external array data.
 inline MUST_USE_RESULT bool ParseArrayIndex(Local<Value> arg,
                                             size_t def,
-                                            size_t* ret) {
+                                            size_t* ret,
+                                            size_t needed = 0) {
   if (arg->IsUndefined()) {
     *ret = def;
     return true;
@@ -162,52 +187,53 @@ inline MUST_USE_RESULT bool ParseArrayIndex(Local<Value> arg,
   // Check that the result fits in a size_t.
   const uint64_t kSizeMax = static_cast<uint64_t>(static_cast<size_t>(-1));
   // coverity[pointless_expression]
-  if (static_cast<uint64_t>(tmp_i) > kSizeMax)
+  if (static_cast<uint64_t>(tmp_i) > kSizeMax - needed)
     return false;
 
   *ret = static_cast<size_t>(tmp_i);
   return true;
 }
 
+}  // anonymous namespace
 
 // Buffer methods
 
 bool HasInstance(Local<Value> val) {
-  return val->IsUint8Array();
+  return val->IsArrayBufferView();
 }
 
 
 bool HasInstance(Local<Object> obj) {
-  return obj->IsUint8Array();
+  return obj->IsArrayBufferView();
 }
 
 
 char* Data(Local<Value> val) {
-  CHECK(val->IsUint8Array());
-  Local<Uint8Array> ui = val.As<Uint8Array>();
+  CHECK(val->IsArrayBufferView());
+  Local<ArrayBufferView> ui = val.As<ArrayBufferView>();
   ArrayBuffer::Contents ab_c = ui->Buffer()->GetContents();
   return static_cast<char*>(ab_c.Data()) + ui->ByteOffset();
 }
 
 
 char* Data(Local<Object> obj) {
-  CHECK(obj->IsUint8Array());
-  Local<Uint8Array> ui = obj.As<Uint8Array>();
+  CHECK(obj->IsArrayBufferView());
+  Local<ArrayBufferView> ui = obj.As<ArrayBufferView>();
   ArrayBuffer::Contents ab_c = ui->Buffer()->GetContents();
   return static_cast<char*>(ab_c.Data()) + ui->ByteOffset();
 }
 
 
 size_t Length(Local<Value> val) {
-  CHECK(val->IsUint8Array());
-  Local<Uint8Array> ui = val.As<Uint8Array>();
+  CHECK(val->IsArrayBufferView());
+  Local<ArrayBufferView> ui = val.As<ArrayBufferView>();
   return ui->ByteLength();
 }
 
 
 size_t Length(Local<Object> obj) {
-  CHECK(obj->IsUint8Array());
-  Local<Uint8Array> ui = obj.As<Uint8Array>();
+  CHECK(obj->IsArrayBufferView());
+  Local<ArrayBufferView> ui = obj.As<ArrayBufferView>();
   return ui->ByteLength();
 }
 
@@ -411,6 +437,7 @@ MaybeLocal<Object> New(Environment* env, char* data, size_t length) {
   return Local<Object>();
 }
 
+namespace {
 
 void CreateFromString(const FunctionCallbackInfo<Value>& args) {
   CHECK(args[0]->IsString());
@@ -593,9 +620,6 @@ void Fill(const FunctionCallbackInfo<Value>& args) {
       enc == UTF8 ? str_obj->Utf8Length() :
       enc == UCS2 ? str_obj->Length() * sizeof(uint16_t) : str_obj->Length();
 
-  if (enc == HEX && str_length  % 2 != 0)
-    return env->ThrowTypeError("Invalid hex string");
-
   if (str_length == 0)
     return;
 
@@ -662,9 +686,6 @@ void StringWrite(const FunctionCallbackInfo<Value>& args) {
     return env->ThrowTypeError("Argument must be a string");
 
   Local<String> str = args[0]->ToString(env->isolate());
-
-  if (encoding == HEX && str->Length() % 2 != 0)
-    return env->ThrowTypeError("Invalid hex string");
 
   size_t offset;
   size_t max_length;
@@ -784,7 +805,7 @@ void WriteFloatGeneric(const FunctionCallbackInfo<Value>& args) {
     THROW_AND_RETURN_UNLESS_BUFFER(env, args[0]);
   }
 
-  Local<Uint8Array> ts_obj = args[0].As<Uint8Array>();
+  Local<ArrayBufferView> ts_obj = args[0].As<ArrayBufferView>();
   ArrayBuffer::Contents ts_obj_c = ts_obj->Buffer()->GetContents();
   const size_t ts_obj_offset = ts_obj->ByteOffset();
   const size_t ts_obj_length = ts_obj->ByteLength();
@@ -794,17 +815,28 @@ void WriteFloatGeneric(const FunctionCallbackInfo<Value>& args) {
     CHECK_NE(ts_obj_data, nullptr);
 
   T val = args[1]->NumberValue(env->context()).FromMaybe(0);
-  size_t offset = args[2]->IntegerValue(env->context()).FromMaybe(0);
 
   size_t memcpy_num = sizeof(T);
+  size_t offset;
 
-  if (should_assert) {
-    THROW_AND_RETURN_IF_OOB(offset + memcpy_num >= memcpy_num);
-    THROW_AND_RETURN_IF_OOB(offset + memcpy_num <= ts_obj_length);
+  // If the offset is negative or larger than the size of the ArrayBuffer,
+  // throw an error (if needed) and return directly.
+  if (!ParseArrayIndex(args[2], 0, &offset, memcpy_num) ||
+      offset >= ts_obj_length) {
+    if (should_assert)
+      THROW_AND_RETURN_IF_OOB(false);
+    return;
   }
 
-  if (offset + memcpy_num > ts_obj_length)
-    memcpy_num = ts_obj_length - offset;
+  // If the offset is too large for the entire value, but small enough to fit
+  // part of the value, throw an error and return only if should_assert is
+  // true. Otherwise, write the part of the value that fits.
+  if (offset + memcpy_num > ts_obj_length) {
+    if (should_assert)
+      THROW_AND_RETURN_IF_OOB(false);
+    else
+      memcpy_num = ts_obj_length - offset;
+  }
 
   union NoAlias {
     T val;
@@ -1257,7 +1289,7 @@ void Initialize(Local<Object> target,
               Integer::New(env->isolate(), String::kMaxLength)).FromJust();
 }
 
-
+}  // anonymous namespace
 }  // namespace Buffer
 }  // namespace node
 

@@ -1,7 +1,7 @@
 'use strict';
 
 /* WPT Refs:
-   https://github.com/w3c/web-platform-tests/blob/b207902/url/urltestdata.json
+   https://github.com/w3c/web-platform-tests/blob/3eff1bd/url/urltestdata.json
    License: http://www.w3.org/Consortium/Legal/2008/04-testsuite-copyright.html
 */
 module.exports =
@@ -278,6 +278,11 @@ module.exports =
   },
   {
     "input": "http://f:999999/c",
+    "base": "http://example.org/foo/bar",
+    "failure": true
+  },
+  {
+    "input": "non-special://f:999999/c",
     "base": "http://example.org/foo/bar",
     "failure": true
   },
@@ -571,21 +576,21 @@ module.exports =
     "search": "",
     "hash": ""
   },
-  // {
-  //   "input": "foo://",
-  //   "base": "http://example.org/foo/bar",
-  //   "href": "foo://",
-  //   "origin": "null",
-  //   "protocol": "foo:",
-  //   "username": "",
-  //   "password": "",
-  //   "host": "",
-  //   "hostname": "",
-  //   "port": "",
-  //   "pathname": "",
-  //   "search": "",
-  //   "hash": ""
-  // },
+  {
+    "input": "foo://",
+    "base": "http://example.org/foo/bar",
+    "href": "foo://",
+    "origin": "null",
+    "protocol": "foo:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "",
+    "search": "",
+    "hash": ""
+  },
   {
     "input": "http://a:b@c:29/d",
     "base": "http://example.org/foo/bar",
@@ -3669,6 +3674,35 @@ module.exports =
     "search": "",
     "hash": ""
   },
+  // {
+  //   "input": "https://faß.ExAmPlE/",
+  //   "base": "about:blank",
+  //   "href": "https://xn--fa-hia.example/",
+  //   "origin": "https://faß.example",
+  //   "protocol": "https:",
+  //   "username": "",
+  //   "password": "",
+  //   "host": "xn--fa-hia.example",
+  //   "hostname": "xn--fa-hia.example",
+  //   "port": "",
+  //   "pathname": "/",
+  //   "search": "",
+  //   "hash": ""
+  // },
+  // {
+  //   "input": "sc://faß.ExAmPlE/",
+  //   "base": "about:blank",
+  //   "href": "sc://fa%C3%9F.ExAmPlE/",
+  //   "protocol": "sc:",
+  //   "username": "",
+  //   "password": "",
+  //   "host": "fa%C3%9F.ExAmPlE",
+  //   "hostname": "fa%C3%9F.ExAmPlE",
+  //   "port": "",
+  //   "pathname": "/",
+  //   "search": "",
+  //   "hash": ""
+  // },
   "Invalid escaped characters should fail and the percents should be escaped. https://www.w3.org/Bugs/Public/show_bug.cgi?id=24191",
   {
     "input": "http://%zz%66%a.com",
@@ -3766,26 +3800,26 @@ module.exports =
     "base": "http://other.com/",
     "failure": true
   },
-  // {
-  //   "input": "http://[::1.2.3.4x]",
-  //   "base": "http://other.com/",
-  //   "failure": true
-  // },
-  // {
-  //   "input": "http://[::1.2.3.]",
-  //   "base": "http://other.com/",
-  //   "failure": true
-  // },
-  // {
-  //   "input": "http://[::1.2.]",
-  //   "base": "http://other.com/",
-  //   "failure": true
-  // },
-  // {
-  //   "input": "http://[::1.]",
-  //   "base": "http://other.com/",
-  //   "failure": true
-  // },
+  {
+    "input": "http://[::1.2.3.4x]",
+    "base": "http://other.com/",
+    "failure": true
+  },
+  {
+    "input": "http://[::1.2.3.]",
+    "base": "http://other.com/",
+    "failure": true
+  },
+  {
+    "input": "http://[::1.2.]",
+    "base": "http://other.com/",
+    "failure": true
+  },
+  {
+    "input": "http://[::1.]",
+    "base": "http://other.com/",
+    "failure": true
+  },
   "Misc Unicode",
   {
     "input": "http://foo:💩@example.com/bar",
@@ -4639,7 +4673,7 @@ module.exports =
     "port": "",
     "pathname": "/foo/bar",
     "search": "??a=b&c=d",
-    // "searchParams": "%3Fa=b&c=d",
+    "searchParams": "%3Fa=b&c=d",
     "hash": ""
   },
   "# Scheme only",
@@ -5110,6 +5144,318 @@ module.exports =
     "search": "?test",
     "hash": "#x"
   },
+  "# File URLs and many (back)slashes",
+  {
+    "input": "file:\\\\//",
+    "base": "about:blank",
+    "href": "file:///",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file:\\\\\\\\",
+    "base": "about:blank",
+    "href": "file:///",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file:\\\\\\\\?fox",
+    "base": "about:blank",
+    "href": "file:///?fox",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "?fox",
+    "hash": ""
+  },
+  {
+    "input": "file:\\\\\\\\#guppy",
+    "base": "about:blank",
+    "href": "file:///#guppy",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": "#guppy"
+  },
+  {
+    "input": "file://spider///",
+    "base": "about:blank",
+    "href": "file://spider/",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "spider",
+    "hostname": "spider",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file:\\\\localhost//",
+    "base": "about:blank",
+    "href": "file:///",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file:///localhost//cat",
+    "base": "about:blank",
+    "href": "file:///localhost//cat",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/localhost//cat",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file://\\/localhost//cat",
+    "base": "about:blank",
+    "href": "file:///localhost//cat",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/localhost//cat",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file://localhost//a//../..//",
+    "base": "about:blank",
+    "href": "file:///",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "/////mouse",
+    "base": "file:///elephant",
+    "href": "file:///mouse",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/mouse",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "\\//pig",
+    "base": "file://lion/",
+    "href": "file:///pig",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/pig",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "\\/localhost//pig",
+    "base": "file://lion/",
+    "href": "file:///pig",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/pig",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "//localhost//pig",
+    "base": "file://lion/",
+    "href": "file:///pig",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/pig",
+    "search": "",
+    "hash": ""
+  },
+  // {
+  //   "input": "/..//localhost//pig",
+  //   "base": "file://lion/",
+  //   "href": "file://lion/localhost//pig",
+  //   "protocol": "file:",
+  //   "username": "",
+  //   "password": "",
+  //   "host": "lion",
+  //   "hostname": "lion",
+  //   "port": "",
+  //   "pathname": "/localhost//pig",
+  //   "search": "",
+  //   "hash": ""
+  // },
+  {
+    "input": "file://",
+    "base": "file://ape/",
+    "href": "file:///",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/",
+    "search": "",
+    "hash": ""
+  },
+  "# File URLs with non-empty hosts",
+  // {
+  //   "input": "/rooibos",
+  //   "base": "file://tea/",
+  //   "href": "file://tea/rooibos",
+  //   "protocol": "file:",
+  //   "username": "",
+  //   "password": "",
+  //   "host": "tea",
+  //   "hostname": "tea",
+  //   "port": "",
+  //   "pathname": "/rooibos",
+  //   "search": "",
+  //   "hash": ""
+  // },
+  // {
+  //   "input": "/?chai",
+  //   "base": "file://tea/",
+  //   "href": "file://tea/?chai",
+  //   "protocol": "file:",
+  //   "username": "",
+  //   "password": "",
+  //   "host": "tea",
+  //   "hostname": "tea",
+  //   "port": "",
+  //   "pathname": "/",
+  //   "search": "?chai",
+  //   "hash": ""
+  // },
+  "# Windows drive letter quirk with not empty host",
+  {
+    "input": "file://example.net/C:/",
+    "base": "about:blank",
+    "href": "file:///C:/",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/C:/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file://1.2.3.4/C:/",
+    "base": "about:blank",
+    "href": "file:///C:/",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/C:/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file://[1::8]/C:/",
+    "base": "about:blank",
+    "href": "file:///C:/",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/C:/",
+    "search": "",
+    "hash": ""
+  },
+  "# Windows drive letter quirk (no host)",
+  {
+    "input": "file:/C|/",
+    "base": "about:blank",
+    "href": "file:///C:/",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/C:/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "file://C|/",
+    "base": "about:blank",
+    "href": "file:///C:/",
+    "protocol": "file:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "/C:/",
+    "search": "",
+    "hash": ""
+  },
   "# file URLs without base URL by Rimas Misevičius",
   {
     "input": "file:",
@@ -5213,12 +5559,12 @@ module.exports =
   {
     "input": "http://?",
     "base": "about:blank",
-    "failure": "true"
+    "failure": true
   },
   {
     "input": "http://#",
     "base": "about:blank",
-    "failure": "true"
+    "failure": true
   },
   "# Non-special-URL path tests",
   // {
@@ -5338,34 +5684,34 @@ module.exports =
     "search": "",
     "hash": ""
   },
-  // {
-  //   "input": "////",
-  //   "base": "sc://x/",
-  //   "href": "sc:////",
-  //   "protocol": "sc:",
-  //   "username": "",
-  //   "password": "",
-  //   "host": "",
-  //   "hostname": "",
-  //   "port": "",
-  //   "pathname": "//",
-  //   "search": "",
-  //   "hash": ""
-  // },
-  // {
-  //   "input": "////x/",
-  //   "base": "sc://x/",
-  //   "href": "sc:////x/",
-  //   "protocol": "sc:",
-  //   "username": "",
-  //   "password": "",
-  //   "host": "",
-  //   "hostname": "",
-  //   "port": "",
-  //   "pathname": "//x/",
-  //   "search": "",
-  //   "hash": ""
-  // },
+  {
+    "input": "////",
+    "base": "sc://x/",
+    "href": "sc:////",
+    "protocol": "sc:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "//",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "////x/",
+    "base": "sc://x/",
+    "href": "sc:////x/",
+    "protocol": "sc:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "//x/",
+    "search": "",
+    "hash": ""
+  },
   {
     "input": "tftp://foobar.com/someconfig;mode=netascii",
     "base": "about:blank",
@@ -5622,5 +5968,33 @@ module.exports =
     "input": "non-special://[:80/",
     "base": "about:blank",
     "failure": true
+  },
+  {
+    "input": "blob:https://example.com:443/",
+    "base": "about:blank",
+    "href": "blob:https://example.com:443/",
+    "protocol": "blob:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "https://example.com:443/",
+    "search": "",
+    "hash": ""
+  },
+  {
+    "input": "blob:d3958f5c-0777-0845-9dcf-2cb28783acaf",
+    "base": "about:blank",
+    "href": "blob:d3958f5c-0777-0845-9dcf-2cb28783acaf",
+    "protocol": "blob:",
+    "username": "",
+    "password": "",
+    "host": "",
+    "hostname": "",
+    "port": "",
+    "pathname": "d3958f5c-0777-0845-9dcf-2cb28783acaf",
+    "search": "",
+    "hash": ""
   }
 ]

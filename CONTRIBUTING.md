@@ -46,15 +46,6 @@ $ git remote add upstream git://github.com/nodejs/node.git
 For developing new features and bug fixes, the `master` branch should be pulled
 and built upon.
 
-#### Respect the stability index
-
-The rules for the master branch are less strict; consult the
-[stability index](./doc/api/documentation.md#stability-index) for details.
-
-In a nutshell, modules are at varying levels of API stability. Bug fixes are
-always welcome but API or behavioral changes to modules at stability level 3
-(Locked) are off-limits.
-
 #### Dependencies
 
 Node.js has several bundled dependencies in the *deps/* and the *tools/*
@@ -71,7 +62,7 @@ does not align with the project team. (Node.js has two IRC channels:
 [#Node.js](http://webchat.freenode.net/?channels=node.js) for general help and
 questions, and
 [#Node-dev](http://webchat.freenode.net/?channels=node-dev) for development of
-Node.js core specifically.
+Node.js core specifically).
 
 For instructions on updating the version of V8 included in the *deps/*
 directory, please refer to [the Maintaining V8 in Node.js guide](https://github.com/nodejs/node/blob/master/doc/guides/maintaining-V8.md).
@@ -103,6 +94,8 @@ Add and commit:
 $ git add my/changed/files
 $ git commit
 ```
+
+### Commit guidelines
 
 Writing good commit logs is important. A commit log should describe what
 changed and why. Follow these guidelines when writing one:
@@ -164,7 +157,7 @@ Bug fixes and features **should come with tests**. Add your tests in the
 project, see this [guide](./doc/guides/writing-tests.md). Looking at other tests
 to see how they should be structured can also help.
 
-To run the tests on Unix / OS X:
+To run the tests on Unix / macOS:
 
 ```text
 $ ./configure && make -j4 test
@@ -185,8 +178,7 @@ Running `make test`/`vcbuild test` will run the linter as well unless one or
 more tests fail.
 
 If you want to run the linter without running tests, use
-`make lint`/`vcbuild jslint`. At this time, only JavaScript linting is
-available on Windows. `make lint` on POSIX will run both JavaScript linting and
+`make lint`/`vcbuild lint`. It will run both JavaScript linting and
 C++ linting.
 
 If you are updating tests and just want to run a single test to check it, you

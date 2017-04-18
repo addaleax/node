@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 'use strict';
 require('../common');
 const assert = require('assert');
@@ -89,7 +110,9 @@ const qsColonTestCases = [
 const extendedFunction = function() {};
 extendedFunction.prototype = {a: 'b'};
 const qsWeirdObjects = [
+  // eslint-disable-next-line no-unescaped-regexp-dot
   [{regexp: /./g}, 'regexp=', {'regexp': ''}],
+  // eslint-disable-next-line no-unescaped-regexp-dot
   [{regexp: new RegExp('.', 'g')}, 'regexp=', {'regexp': ''}],
   [{fn: function() {}}, 'fn=', {'fn': ''}],
   [{fn: new Function('')}, 'fn=', {'fn': ''}],
@@ -350,6 +373,8 @@ function demoDecode(str) {
 }
 check(qs.parse('a=a&b=b&c=c', null, null, { decodeURIComponent: demoDecode }),
       { aa: 'aa', bb: 'bb', cc: 'cc' });
+check(qs.parse('a=a&b=b&c=c', null, '==', { decodeURIComponent: (str) => str }),
+      { 'a=a': '', 'b=b': '', 'c=c': '' });
 
 // Test QueryString.unescape
 function errDecode(str) {

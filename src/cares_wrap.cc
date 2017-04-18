@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #define CARES_STATICLIB
 #include "ares.h"
 #include "async-wrap.h"
@@ -46,6 +67,7 @@ using v8::Object;
 using v8::String;
 using v8::Value;
 
+namespace {
 
 inline const char* ToErrorCodeString(int status) {
   switch (status) {
@@ -93,11 +115,6 @@ GetAddrInfoReqWrap::GetAddrInfoReqWrap(Environment* env,
 }
 
 
-static void NewGetAddrInfoReqWrap(const FunctionCallbackInfo<Value>& args) {
-  CHECK(args.IsConstructCall());
-}
-
-
 class GetNameInfoReqWrap : public ReqWrap<uv_getnameinfo_t> {
  public:
   GetNameInfoReqWrap(Environment* env, Local<Object> req_wrap_obj);
@@ -112,17 +129,7 @@ GetNameInfoReqWrap::GetNameInfoReqWrap(Environment* env,
 }
 
 
-static void NewGetNameInfoReqWrap(const FunctionCallbackInfo<Value>& args) {
-  CHECK(args.IsConstructCall());
-}
-
-
-static void NewQueryReqWrap(const FunctionCallbackInfo<Value>& args) {
-  CHECK(args.IsConstructCall());
-}
-
-
-static int cmp_ares_tasks(const node_ares_task* a, const node_ares_task* b) {
+int cmp_ares_tasks(const node_ares_task* a, const node_ares_task* b) {
   if (a->sock < b->sock)
     return -1;
   if (a->sock > b->sock)
@@ -137,14 +144,14 @@ RB_GENERATE_STATIC(node_ares_task_list, node_ares_task, node, cmp_ares_tasks)
 
 /* This is called once per second by loop->timer. It is used to constantly */
 /* call back into c-ares for possibly processing timeouts. */
-static void ares_timeout(uv_timer_t* handle) {
+void ares_timeout(uv_timer_t* handle) {
   Environment* env = Environment::from_cares_timer_handle(handle);
   CHECK_EQ(false, RB_EMPTY(env->cares_task_list()));
   ares_process_fd(env->cares_channel(), ARES_SOCKET_BAD, ARES_SOCKET_BAD);
 }
 
 
-static void ares_poll_cb(uv_poll_t* watcher, int status, int events) {
+void ares_poll_cb(uv_poll_t* watcher, int status, int events) {
   node_ares_task* task = ContainerOf(&node_ares_task::poll_watcher, watcher);
   Environment* env = task->env;
 
@@ -165,7 +172,7 @@ static void ares_poll_cb(uv_poll_t* watcher, int status, int events) {
 }
 
 
-static void ares_poll_close_cb(uv_handle_t* watcher) {
+void ares_poll_close_cb(uv_handle_t* watcher) {
   node_ares_task* task = ContainerOf(&node_ares_task::poll_watcher,
                                   reinterpret_cast<uv_poll_t*>(watcher));
   free(task);
@@ -173,7 +180,7 @@ static void ares_poll_close_cb(uv_handle_t* watcher) {
 
 
 /* Allocates and returns a new node_ares_task */
-static node_ares_task* ares_task_create(Environment* env, ares_socket_t sock) {
+node_ares_task* ares_task_create(Environment* env, ares_socket_t sock) {
   auto task = node::UncheckedMalloc<node_ares_task>(1);
 
   if (task == nullptr) {
@@ -195,10 +202,10 @@ static node_ares_task* ares_task_create(Environment* env, ares_socket_t sock) {
 
 
 /* Callback from ares when socket operation is started */
-static void ares_sockstate_cb(void* data,
-                              ares_socket_t sock,
-                              int read,
-                              int write) {
+void ares_sockstate_cb(void* data,
+                       ares_socket_t sock,
+                       int read,
+                       int write) {
   Environment* env = static_cast<Environment*>(data);
   node_ares_task* task;
 
@@ -220,8 +227,8 @@ static void ares_sockstate_cb(void* data,
       task = ares_task_create(env, sock);
       if (task == nullptr) {
         /* This should never happen unless we're out of memory or something */
-        /* is seriously wrong. The socket won't be polled, but the the query */
-        /* will eventually time out. */
+        /* is seriously wrong. The socket won't be polled, but the query will */
+        /* eventually time out. */
         return;
       }
 
@@ -252,7 +259,7 @@ static void ares_sockstate_cb(void* data,
 }
 
 
-static Local<Array> HostentToAddresses(Environment* env, struct hostent* host) {
+Local<Array> HostentToAddresses(Environment* env, struct hostent* host) {
   EscapableHandleScope scope(env->isolate());
   Local<Array> addresses = Array::New(env->isolate());
 
@@ -267,7 +274,7 @@ static Local<Array> HostentToAddresses(Environment* env, struct hostent* host) {
 }
 
 
-static Local<Array> HostentToNames(Environment* env, struct hostent* host) {
+Local<Array> HostentToNames(Environment* env, struct hostent* host) {
   EscapableHandleScope scope(env->isolate());
   Local<Array> names = Array::New(env->isolate());
 
@@ -1084,7 +1091,7 @@ void AfterGetNameInfo(uv_getnameinfo_t* req,
 }
 
 
-static void IsIP(const FunctionCallbackInfo<Value>& args) {
+void IsIP(const FunctionCallbackInfo<Value>& args) {
   node::Utf8Value ip(args.GetIsolate(), args[0]);
   char address_buffer[sizeof(struct in6_addr)];
 
@@ -1097,7 +1104,7 @@ static void IsIP(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(rc);
 }
 
-static void IsIPv4(const FunctionCallbackInfo<Value>& args) {
+void IsIPv4(const FunctionCallbackInfo<Value>& args) {
   node::Utf8Value ip(args.GetIsolate(), args[0]);
   char address_buffer[sizeof(struct in_addr)];
 
@@ -1108,7 +1115,7 @@ static void IsIPv4(const FunctionCallbackInfo<Value>& args) {
   }
 }
 
-static void IsIPv6(const FunctionCallbackInfo<Value>& args) {
+void IsIPv6(const FunctionCallbackInfo<Value>& args) {
   node::Utf8Value ip(args.GetIsolate(), args[0]);
   char address_buffer[sizeof(struct in6_addr)];
 
@@ -1119,7 +1126,7 @@ static void IsIPv6(const FunctionCallbackInfo<Value>& args) {
   }
 }
 
-static void GetAddrInfo(const FunctionCallbackInfo<Value>& args) {
+void GetAddrInfo(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   CHECK(args[0]->IsObject());
@@ -1167,7 +1174,7 @@ static void GetAddrInfo(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-static void GetNameInfo(const FunctionCallbackInfo<Value>& args) {
+void GetNameInfo(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   CHECK(args[0]->IsObject());
@@ -1196,7 +1203,7 @@ static void GetNameInfo(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-static void GetServers(const FunctionCallbackInfo<Value>& args) {
+void GetServers(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   Local<Array> server_array = Array::New(env->isolate());
@@ -1225,7 +1232,7 @@ static void GetServers(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-static void SetServers(const FunctionCallbackInfo<Value>& args) {
+void SetServers(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
 
   CHECK(args[0]->IsArray());
@@ -1292,30 +1299,30 @@ static void SetServers(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-static void StrError(const FunctionCallbackInfo<Value>& args) {
+void StrError(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   const char* errmsg = ares_strerror(args[0]->Int32Value());
   args.GetReturnValue().Set(OneByteString(env->isolate(), errmsg));
 }
 
 
-static void CaresTimerCloseCb(uv_handle_t* handle) {
+void CaresTimerCloseCb(uv_handle_t* handle) {
   Environment* env = Environment::from_cares_timer_handle(
       reinterpret_cast<uv_timer_t*>(handle));
   env->FinishHandleCleanup(handle);
 }
 
 
-static void CaresTimerClose(Environment* env,
+void CaresTimerClose(Environment* env,
                             uv_handle_t* handle,
                             void* arg) {
   uv_close(handle, CaresTimerCloseCb);
 }
 
 
-static void Initialize(Local<Object> target,
-                       Local<Value> unused,
-                       Local<Context> context) {
+void Initialize(Local<Object> target,
+                Local<Value> unused,
+                Local<Context> context) {
   Environment* env = Environment::GetCurrent(context);
 
   int r = ares_library_init(ARES_LIB_INIT_ALL);
@@ -1378,8 +1385,12 @@ static void Initialize(Local<Object> target,
   target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "AI_V4MAPPED"),
               Integer::New(env->isolate(), AI_V4MAPPED));
 
+  auto is_construct_call_callback =
+      [](const FunctionCallbackInfo<Value>& args) {
+    CHECK(args.IsConstructCall());
+  };
   Local<FunctionTemplate> aiw =
-      FunctionTemplate::New(env->isolate(), NewGetAddrInfoReqWrap);
+      FunctionTemplate::New(env->isolate(), is_construct_call_callback);
   aiw->InstanceTemplate()->SetInternalFieldCount(1);
   aiw->SetClassName(
       FIXED_ONE_BYTE_STRING(env->isolate(), "GetAddrInfoReqWrap"));
@@ -1387,7 +1398,7 @@ static void Initialize(Local<Object> target,
               aiw->GetFunction());
 
   Local<FunctionTemplate> niw =
-      FunctionTemplate::New(env->isolate(), NewGetNameInfoReqWrap);
+      FunctionTemplate::New(env->isolate(), is_construct_call_callback);
   niw->InstanceTemplate()->SetInternalFieldCount(1);
   niw->SetClassName(
       FIXED_ONE_BYTE_STRING(env->isolate(), "GetNameInfoReqWrap"));
@@ -1395,7 +1406,7 @@ static void Initialize(Local<Object> target,
               niw->GetFunction());
 
   Local<FunctionTemplate> qrw =
-      FunctionTemplate::New(env->isolate(), NewQueryReqWrap);
+      FunctionTemplate::New(env->isolate(), is_construct_call_callback);
   qrw->InstanceTemplate()->SetInternalFieldCount(1);
   qrw->SetClassName(
       FIXED_ONE_BYTE_STRING(env->isolate(), "QueryReqWrap"));
@@ -1403,6 +1414,7 @@ static void Initialize(Local<Object> target,
               qrw->GetFunction());
 }
 
+}  // anonymous namespace
 }  // namespace cares_wrap
 }  // namespace node
 

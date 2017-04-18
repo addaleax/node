@@ -9,7 +9,9 @@ namespace node {
 
 namespace {
 const int default_debugger_port = 5858;
+#if HAVE_INSPECTOR
 const int default_inspector_port = 9229;
+#endif  // HAVE_INSPECTOR
 
 inline std::string remove_brackets(const std::string& host) {
   if (!host.empty() && host.front() == '[' && host.back() == ']')
@@ -92,13 +94,7 @@ bool DebugOptions::ParseOption(const std::string& option) {
     argument = option.substr(pos + 1);
   }
 
-  // --debug and --inspect are mutually exclusive
-  if (option_name == "--debug") {
-    debugger_enabled_ = true;
-  } else if (option_name == "--debug-brk") {
-    debugger_enabled_ = true;
-    wait_connect_ = true;
-  } else if (option_name == "--inspect") {
+  if (option_name == "--inspect") {
     debugger_enabled_ = true;
     enable_inspector = true;
   } else if (option_name == "--inspect-brk") {
@@ -108,7 +104,7 @@ bool DebugOptions::ParseOption(const std::string& option) {
   } else if ((option_name != "--debug-port" &&
               option_name != "--inspect-port") ||
               !has_argument) {
-    // only other valid possibility is --debug-port,
+    // only other valid possibility is --inspect-port,
     // which requires an argument
     return false;
   }
@@ -140,10 +136,10 @@ bool DebugOptions::ParseOption(const std::string& option) {
 int DebugOptions::port() const {
   int port = port_;
   if (port < 0) {
-#if HAVE_INSPECTOR
-    port = inspector_enabled_ ? default_inspector_port : default_debugger_port;
-#else
     port = default_debugger_port;
+#if HAVE_INSPECTOR
+    if (!debugger_enabled_ || inspector_enabled_)
+      port = default_inspector_port;
 #endif  // HAVE_INSPECTOR
   }
   return port;

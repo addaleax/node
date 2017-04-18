@@ -1,5 +1,6 @@
 'use strict';
-require('../common');
+const common = require('../common');
+common.skipIfInspectorDisabled();
 const assert = require('assert');
 const helper = require('./inspector-helper.js');
 
@@ -11,7 +12,7 @@ function checkListResponse(err, response) {
   assert.ok(response[0]['devtoolsFrontendUrl']);
   assert.ok(
     response[0]['webSocketDebuggerUrl']
-      .match(/ws:\/\/127.0.0.1:\d+\/[0-9A-Fa-f]{8}-/));
+      .match(/ws:\/\/127\.0\.0\.1:\d+\/[0-9A-Fa-f]{8}-/));
 }
 
 function checkVersion(err, response) {
@@ -208,12 +209,12 @@ function testWaitsForFrontendDisconnect(session, harness) {
 
 function runTests(harness) {
   harness
-    .testHttpResponse('/json', checkListResponse)
-    .testHttpResponse('/json/list', checkListResponse)
-    .testHttpResponse('/json/version', checkVersion)
-    .testHttpResponse('/json/activate', checkBadPath)
-    .testHttpResponse('/json/activate/boom', checkBadPath)
-    .testHttpResponse('/json/badpath', checkBadPath)
+    .testHttpResponse(null, '/json', checkListResponse)
+    .testHttpResponse(null, '/json/list', checkListResponse)
+    .testHttpResponse(null, '/json/version', checkVersion)
+    .testHttpResponse(null, '/json/activate', checkBadPath)
+    .testHttpResponse(null, '/json/activate/boom', checkBadPath)
+    .testHttpResponse(null, '/json/badpath', checkBadPath)
     .runFrontendSession([
       testNoUrlsWhenConnected,
       testBreakpointOnStart,

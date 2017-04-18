@@ -162,7 +162,7 @@ For example:
 
 ```js
 process.on('uncaughtException', (err) => {
-  fs.writeSync(1, `Caught exception: ${err}`);
+  fs.writeSync(1, `Caught exception: ${err}\n`);
 });
 
 setTimeout(() => {
@@ -231,7 +231,7 @@ For example:
 
 ```js
 process.on('unhandledRejection', (reason, p) => {
-  console.log('Unhandled Rejection at: Promise', p, 'reason:', reason);
+  console.log('Unhandled Rejection at:', p, 'reason:', reason);
   // application specific logging, throwing an error, or other logic here
 });
 
@@ -249,7 +249,7 @@ function SomeResource() {
   this.loaded = Promise.reject(new Error('Resource not yet loaded!'));
 }
 
-var resource = new SomeResource();
+const resource = new SomeResource();
 // no .catch or .then on resource.loaded for at least a turn
 ```
 
@@ -298,11 +298,11 @@ too many listeners have been added to an event
 
 ```txt
 $ node
-> event.defaultMaxListeners = 1;
+> events.defaultMaxListeners = 1;
 > process.on('foo', () => {});
 > process.on('foo', () => {});
-> (node:38638) Warning: Possible EventEmitter memory leak detected. 2 foo
-... listeners added. Use emitter.setMaxListeners() to increase limit
+> (node:38638) MaxListenersExceededWarning: Possible EventEmitter memory leak
+detected. 2 foo listeners added. Use emitter.setMaxListeners() to increase limit
 ```
 
 In contrast, the following example turns off the default warning output and
@@ -310,8 +310,8 @@ adds a custom handler to the `'warning'` event:
 
 ```txt
 $ node --no-warnings
-> var p = process.on('warning', (warning) => console.warn('Do not do that!'));
-> event.defaultMaxListeners = 1;
+> const p = process.on('warning', (warning) => console.warn('Do not do that!'));
+> events.defaultMaxListeners = 1;
 > process.on('foo', () => {});
 > process.on('foo', () => {});
 > Do not do that!
@@ -416,7 +416,7 @@ generate a core file.
 added: v0.5.0
 -->
 
-* {String}
+* {string}
 
 The `process.arch` property returns a String identifying the processor
 architecture that the Node.js process is currently running on. For instance
@@ -452,14 +452,14 @@ process.argv.forEach((val, index) => {
 Launching the Node.js process as:
 
 ```console
-$ node process-2.js one two=three four
+$ node process-args.js one two=three four
 ```
 
 Would generate the output:
 
 ```text
 0: /usr/local/bin/node
-1: /Users/mjr/work/node/process-2.js
+1: /Users/mjr/work/node/process-args.js
 2: one
 3: two=three
 4: four
@@ -470,7 +470,7 @@ Would generate the output:
 added: 6.4.0
 -->
 
-* {String}
+* {string}
 
 The `process.argv0` property stores a read-only copy of the original value of
 `argv[0]` passed when Node.js starts.
@@ -511,7 +511,7 @@ try {
   console.log(`New directory: ${process.cwd()}`);
 }
 catch (err) {
-  console.log(`chdir: ${err}`);
+  console.error(`chdir: ${err}`);
 }
 ```
 
@@ -565,7 +565,7 @@ replace the value of `process.config`.
 added: v0.7.2
 -->
 
-* {Boolean}
+* {boolean}
 
 If the Node.js process is spawned with an IPC channel (see the [Child Process][]
 and [Cluster][] documentation), the `process.connected` property will return
@@ -583,8 +583,8 @@ added: v6.1.0
 * `previousValue` {Object} A previous return value from calling
   `process.cpuUsage()`
 * Returns: {Object}
-    * `user` {Integer}
-    * `system` {Integer}
+    * `user` {integer}
+    * `system` {integer}
 
 The `process.cpuUsage()` method returns the user and system CPU time usage of
 the current process, in an object with properties `user` and `system`, whose
@@ -612,7 +612,7 @@ console.log(process.cpuUsage(startUsage));
 added: v0.1.8
 -->
 
-* Returns: {String}
+* Returns: {string}
 
 The `process.cwd()` method returns the current working directory of the Node.js
 process.
@@ -642,7 +642,7 @@ If the Node.js process was not spawned with an IPC channel,
 added: v6.0.0
 -->
 
-* `warning` {string | Error} The warning to emit.
+* `warning` {string|Error} The warning to emit.
 * `type` {string} When `warning` is a String, `type` is the name to use
   for the *type* of warning being emitted. Default: `Warning`.
 * `code` {string} A unique identifier for the warning instance being emitted.
@@ -668,7 +668,7 @@ process.emitWarning('Something Happened!', 'CustomWarning');
 
 ```js
 process.emitWarning('Something happened!', 'CustomWarning', 'WARN001');
-// Emits: (node:56338) CustomWarning [WARN001]: Something Happened!
+// Emits: (node:56338) [WARN001] CustomWarning: Something happened!
 ```
 
 In each of the previous examples, an `Error` object is generated internally by
@@ -696,7 +696,7 @@ myWarning.name = 'CustomWarning';
 myWarning.code = 'WARN001';
 
 process.emitWarning(myWarning);
-// Emits: (node:56338) CustomWarning [WARN001]: Warning! Something Happened!
+// Emits: (node:56338) [WARN001] CustomWarning: Warning! Something happened!
 ```
 
 A `TypeError` is thrown if `warning` is anything other than a string or `Error`
@@ -848,7 +848,7 @@ And `process.argv`:
 added: v0.1.100
 -->
 
-* {String}
+* {string}
 
 The `process.execPath` property returns the absolute pathname of the executable
 that started the Node.js process.
@@ -865,7 +865,7 @@ For example:
 added: v0.1.13
 -->
 
-* `code` {Integer} The exit code. Defaults to `0`.
+* `code` {integer} The exit code. Defaults to `0`.
 
 The `process.exit()` method instructs Node.js to terminate the process
 synchronously with an exit status of `code`. If `code` is omitted, exit uses
@@ -930,7 +930,7 @@ is safer than calling `process.exit()`.
 added: v0.11.8
 -->
 
-* {Integer}
+* {integer}
 
 A number which will be the process exit code, when the process either
 exits gracefully, or is exited via [`process.exit()`][] without specifying
@@ -1015,7 +1015,7 @@ Android)
 added: v0.1.28
 -->
 
-* Returns: {Integer}
+* Returns: {integer}
 
 The `process.getuid()` method returns the numeric user identity of the process.
 (See getuid(2).)
@@ -1053,11 +1053,11 @@ drift. The primary use is for measuring performance between intervals:
 
 ```js
 const NS_PER_SEC = 1e9;
-var time = process.hrtime();
+const time = process.hrtime();
 // [ 1800216, 25 ]
 
 setTimeout(() => {
-  var diff = process.hrtime(time);
+  const diff = process.hrtime(time);
   // [ 1, 552 ]
 
   console.log(`Benchmark took ${diff[0] * NS_PER_SEC + diff[1]} nanoseconds`);
@@ -1158,10 +1158,10 @@ changes:
 -->
 
 * Returns: {Object}
-    * `rss` {Integer}
-    * `heapTotal` {Integer}
-    * `heapUsed` {Integer}
-    * `external` {Integer}
+    * `rss` {integer}
+    * `heapTotal` {integer}
+    * `heapUsed` {integer}
+    * `external` {integer}
 
 The `process.memoryUsage()` method returns an object describing the memory usage
 of the Node.js process measured in bytes.
@@ -1232,7 +1232,7 @@ function MyThing(options) {
   });
 }
 
-var thing = new MyThing();
+const thing = new MyThing();
 thing.getReadyForStuff();
 
 // thing.startDoingStuff() gets called now, not before.
@@ -1256,9 +1256,12 @@ function maybeSync(arg, cb) {
 This API is hazardous because in the following case:
 
 ```js
-maybeSync(true, () => {
+const maybeTrue = Math.random() > 0.5;
+
+maybeSync(maybeTrue, () => {
   foo();
 });
+
 bar();
 ```
 
@@ -1287,7 +1290,7 @@ happening, just like a `while(true);` loop.
 added: v0.1.15
 -->
 
-* {Integer}
+* {integer}
 
 The `process.pid` property returns the PID of the process.
 
@@ -1300,7 +1303,7 @@ console.log(`This process is pid ${process.pid}`);
 added: v0.1.16
 -->
 
-* {String}
+* {string}
 
 The `process.platform` property returns a string identifying the operating
 system platform on which the Node.js process is running. For instance
@@ -1329,7 +1332,7 @@ tarball.
   legacy io.js releases, this will be `'io.js'`.
 * `sourceUrl` {string} an absolute URL pointing to a _`.tar.gz`_ file containing
   the source code of the current release.
-* `headersUrl`{String} an absolute URL pointing to a _`.tar.gz`_ file containing
+* `headersUrl`{string} an absolute URL pointing to a _`.tar.gz`_ file containing
   only the source header files for the current release. This file is
   significantly smaller than the full source file and can be used for compiling
   Node.js native add-ons.
@@ -1365,7 +1368,7 @@ added: v0.5.9
 * `sendHandle` {Handle object}
 * `options` {Object}
 * `callback` {Function}
-* Returns: {Boolean}
+* Returns: {boolean}
 
 If Node.js is spawned with an IPC channel, the `process.send()` method can be
 used to send messages to the parent process. Messages will be received as a
@@ -1509,8 +1512,10 @@ Android)
 
 * {Stream}
 
-The `process.stderr` property returns a [Writable][] stream connected to
-`stderr` (fd `2`).
+The `process.stderr` property returns a stream connected to
+`stderr` (fd `2`). It is a [`net.Socket`][] (which is a [Duplex][]
+stream) unless fd `2` refers to a file, in which case it is
+a [Writable][] stream.
 
 Note: `process.stderr` differs from other Node.js streams in important ways,
 see [note on process I/O][] for more information.
@@ -1519,8 +1524,10 @@ see [note on process I/O][] for more information.
 
 * {Stream}
 
-The `process.stdin` property returns a [Readable][] stream equivalent to or
-associated with `stdin` (fd `0`).
+The `process.stdin` property returns a stream connected to
+`stdin` (fd `0`). It is a [`net.Socket`][] (which is a [Duplex][]
+stream) unless fd `0` refers to a file, in which case it is
+a [Readable][] stream.
 
 For example:
 
@@ -1528,7 +1535,7 @@ For example:
 process.stdin.setEncoding('utf8');
 
 process.stdin.on('readable', () => {
-  var chunk = process.stdin.read();
+  const chunk = process.stdin.read();
   if (chunk !== null) {
     process.stdout.write(`data: ${chunk}`);
   }
@@ -1539,7 +1546,7 @@ process.stdin.on('end', () => {
 });
 ```
 
-As a [Readable][] stream, `process.stdin` can also be used in "old" mode that
+As a [Duplex][] stream, `process.stdin` can also be used in "old" mode that
 is compatible with scripts written for Node.js prior to v0.10.
 For more information see [Stream compatibility][].
 
@@ -1551,8 +1558,10 @@ must call `process.stdin.resume()` to read from it. Note also that calling
 
 * {Stream}
 
-The `process.stdout` property returns a [Writable][] stream connected to
-`stdout` (fd `2`).
+The `process.stdout` property returns a stream connected to
+`stdout` (fd `1`). It is a [`net.Socket`][] (which is a [Duplex][]
+stream) unless fd `1` refers to a file, in which case it is
+a [Writable][] stream.
 
 For example, to copy process.stdin to process.stdout:
 
@@ -1617,7 +1626,7 @@ See the [TTY][] documentation for more information.
 added: v0.1.104
 -->
 
-* {String}
+* {string}
 
 The `process.title` property returns the current process title (i.e. returns
 the current value of `ps`). Assigning a new value to `process.title` modifies
@@ -1625,12 +1634,12 @@ the current value of `ps`.
 
 *Note*: When a new value is assigned, different platforms will impose different
 maximum length restrictions on the title. Usually such restrictions are quite
-limited. For instance, on Linux and OS X, `process.title` is limited to the size
-of the binary name plus the length of the command line arguments because setting
-the `process.title` overwrites the `argv` memory of the process. Node.js v0.8
-allowed for longer process title strings by also overwriting the `environ`
-memory but that was potentially insecure and confusing in some (rather obscure)
-cases.
+limited. For instance, on Linux and macOS, `process.title` is limited to the
+size of the binary name plus the length of the command line arguments because
+setting the `process.title` overwrites the `argv` memory of the process.
+Node.js v0.8 allowed for longer process title strings by also overwriting the
+`environ` memory but that was potentially insecure and confusing in some
+(rather obscure) cases.
 
 ## process.umask([mask])
 <!-- YAML
@@ -1658,17 +1667,20 @@ console.log(
 added: v0.5.0
 -->
 
-* Returns: {Number}
+* Returns: {number}
 
 The `process.uptime()` method returns the number of seconds the current Node.js
 process has been running.
+
+*Note*: the return value includes fractions of a second. Use `Math.floor()`
+to get whole seconds.
 
 ## process.version
 <!-- YAML
 added: v0.1.3
 -->
 
-* {String}
+* {string}
 
 The `process.version` property returns the Node.js version string.
 
@@ -1751,9 +1763,8 @@ cases:
   source code internal in Node.js's bootstrapping process threw an error
   when the bootstrapping function was called.  This is extremely rare,
   and generally can only happen during development of Node.js itself.
-* `12` **Invalid Debug Argument** - The `--debug`, `--inspect` and/or
-  `--debug-brk` options were set, but the port number chosen was invalid
-  or unavailable.
+* `12` **Invalid Debug Argument** - The `--inspect` and/or `--inspect-brk`
+  options were set, but the port number chosen was invalid or unavailable.
 * `>128` **Signal Exits** - If Node.js receives a fatal signal such as
   `SIGKILL` or `SIGHUP`, then its exit code will be `128` plus the
   value of the signal code.  This is a standard Unix practice, since
@@ -1774,6 +1785,8 @@ cases:
 [`Error`]: errors.html#errors_class_error
 [`EventEmitter`]: events.html#events_class_eventemitter
 [`JSON.stringify()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/stringify
+[`console.error()`]: console.html#console_console_error_data_args
+[`console.log()`]: console.html#console_console_log_data_args
 [`net.Server`]: net.html#net_class_net_server
 [`net.Socket`]: net.html#net_class_net_socket
 [`process.argv`]: #process_process_argv
@@ -1791,6 +1804,7 @@ cases:
 [TTY]: tty.html#tty_tty
 [Writable]: stream.html#stream_writable_streams
 [Readable]: stream.html#stream_readable_streams
+[Duplex]: stream.html#stream_duplex_and_transform_streams
 [Child Process]: child_process.html
 [Cluster]: cluster.html
 [`process.exitCode`]: #process_process_exitcode

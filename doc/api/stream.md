@@ -281,7 +281,7 @@ has been called, and all data has been flushed to the underlying system.
 ```js
 const writer = getWritableStreamSomehow();
 for (var i = 0; i < 100; i ++) {
-  writer.write('hello, #${i}!\n');
+  writer.write(`hello, #${i}!\n`);
 }
 writer.end('This is the end\n');
 writer.on('finish', () => {
@@ -443,7 +443,7 @@ changes:
 * `chunk` {string|Buffer} The data to write
 * `encoding` {string} The encoding, if `chunk` is a String
 * `callback` {Function} Callback for when this chunk of data is flushed
-* Returns: {Boolean} `false` if the stream wishes for the calling code to
+* Returns: {boolean} `false` if the stream wishes for the calling code to
   wait for the `'drain'` event to be emitted before continuing to write
   additional data; otherwise `true`.
 
@@ -480,7 +480,7 @@ If the data to be written can be generated or fetched on demand, it is
 recommended to encapsulate the logic into a [Readable][] and use
 [`stream.pipe()`][]. However, if calling `write()` is preferred, it is
 possible to respect backpressure and avoid memory issues using the
-the [`'drain'`][] event:
+[`'drain'`][] event:
 
 ```js
 function write (data, cb) {
@@ -556,7 +556,7 @@ that the stream will *remain* paused once those destinations drain and ask for
 more data.
 
 *Note*: If a [Readable][] is switched into flowing mode and there are no
-consumers available handle the data, that data will be lost. This can occur,
+consumers available to handle the data, that data will be lost. This can occur,
 for instance, when the `readable.resume()` method is called without a listener
 attached to the `'data'` event, or when a `'data'` event handler is removed
 from the stream.
@@ -737,11 +737,11 @@ end
 preferred over the use of the `'readable'` event.
 
 ##### readable.isPaused()
-<!--
+<!-- YAML
 added: v0.11.14
 -->
 
-* Returns: {Boolean}
+* Returns: {boolean}
 
 The `readable.isPaused()` method returns the current operating state of the
 Readable. This is used primarily by the mechanism that underlies the
@@ -846,7 +846,7 @@ added: v0.9.4
 -->
 
 * `size` {number} Optional argument to specify how much data to read.
-* Return {String|Buffer|null}
+* Return {string|Buffer|null}
 
 The `readable.read()` method pulls some data out of the internal buffer and
 returns it. If no data available to be read, `null` is returned. By default,
@@ -981,7 +981,7 @@ setTimeout(() => {
 added: v0.9.11
 -->
 
-* `chunk` {Buffer|string} Chunk of data to unshift onto the read queue
+* `chunk` {Buffer|string|any} Chunk of data to unshift onto the read queue
 
 The `readable.unshift()` method pushes a chunk of data back into the internal
 buffer. This is useful in certain situations where a stream is being consumed by
@@ -1016,7 +1016,7 @@ function parseHeader(stream, callback) {
         const remaining = split.join('\n\n');
         const buf = Buffer.from(remaining, 'utf8');
         stream.removeListener('error', callback);
-        // set the readable listener before unshifting
+        // remove the readable listener before unshifting
         stream.removeListener('readable', onReadable);
         if (buf.length)
           stream.unshift(buf);
@@ -1122,7 +1122,7 @@ implement streams using JavaScript's prototypal inheritance model.
 
 First, a stream developer would declare a new JavaScript class that extends one
 of the four basic stream classes (`stream.Writable`, `stream.Readable`,
-`stream.Duplex`, or `stream.Transform`), making sure the call the appropriate
+`stream.Duplex`, or `stream.Transform`), making sure they call the appropriate
 parent class constructor:
 
 ```js
@@ -1295,8 +1295,9 @@ const myWritable = new Writable({
 
 #### writable.\_write(chunk, encoding, callback)
 
-* `chunk` {Buffer|string} The chunk to be written. Will **always**
-  be a buffer unless the `decodeStrings` option was set to `false`.
+* `chunk` {Buffer|string|any} The chunk to be written. Will **always**
+  be a buffer unless the `decodeStrings` option was set to `false`
+  or the stream is operating in object mode.
 * `encoding` {string} If the chunk is a string, then `encoding` is the
   character encoding of that string. If chunk is a `Buffer`, or if the
   stream is operating in object mode, `encoding` may be ignored.
@@ -1500,13 +1501,13 @@ user programs.
 
 #### readable.push(chunk[, encoding])
 
-* `chunk` {Buffer|null|string} Chunk of data to push into the read queue
+* `chunk` {Buffer|null|string|any} Chunk of data to push into the read queue
 * `encoding` {string} Encoding of String chunks.  Must be a valid
   Buffer encoding, such as `'utf8'` or `'ascii'`
-* Returns {Boolean} `true` if additional chunks of data may continued to be
+* Returns {boolean} `true` if additional chunks of data may continued to be
   pushed; `false` otherwise.
 
-When `chunk` is a `Buffer` or `string`, the `chunk` of data will be added to the
+When `chunk` is not `null`, the `chunk` of data will be added to the
 internal queue for users of the stream to consume. Passing `chunk` as `null`
 signals the end of the stream (EOF), after which no more data can be written.
 
@@ -1873,8 +1874,9 @@ user programs.
 
 #### transform.\_transform(chunk, encoding, callback)
 
-* `chunk` {Buffer|string} The chunk to be transformed. Will **always**
-  be a buffer unless the `decodeStrings` option was set to `false`.
+* `chunk` {Buffer|string|any} The chunk to be transformed. Will **always**
+  be a buffer unless the `decodeStrings` option was set to `false`
+  or the stream is operating in object mode.
 * `encoding` {string} If the chunk is a string, then this is the
   encoding type. If chunk is a buffer, then this is the special
   value - 'buffer', ignore it in this case.

@@ -7,20 +7,20 @@ var test = require('../../test/common.js');
 
 var bench = common.createBenchmark(main, {
   len:  [1, 4, 8, 16, 32, 64, 128],
-  num:  [5, 50, 500, 2000],
+  n:  [5, 50, 500, 2000],
   type: ['send'],
 });
 
 
 function main(conf) {
   var len = +conf.len;
-  var num = +conf.num;
+  var num = +conf.n;
   var todo = [];
   var headers = [];
   // Chose 7 because 9 showed "Connection error" / "Connection closed"
   // An odd number could result in a better length dispersion.
   for (var i = 7; i <= 7 * 7 * 7; i *= 7)
-    headers.push(Array(i + 1).join('o'));
+    headers.push('o'.repeat(i));
 
   function WriteHTTPHeaders(channel, has_keep_alive, extra_header_count) {
     todo = [];

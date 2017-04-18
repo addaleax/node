@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 /*
  * notes: by srl295
  *  - When in NODE_HAVE_SMALL_ICU mode, ICU is linked against "stub" (null) data
@@ -43,6 +64,7 @@
 #include <unicode/ulocdata.h>
 #include <unicode/uvernum.h>
 #include <unicode/uversion.h>
+#include <unicode/ustring.h>
 
 #ifdef NODE_HAVE_SMALL_ICU
 /* if this is defined, we have a 'secondary' entry point.
@@ -71,6 +93,7 @@ using v8::String;
 using v8::Value;
 
 namespace i18n {
+namespace {
 
 template <typename T>
 MaybeLocal<Object> ToBufferEndian(Environment* env, MaybeStackBuffer<T>* buf) {
@@ -322,7 +345,7 @@ void Transcode(const FunctionCallbackInfo<Value>&args) {
   return args.GetReturnValue().Set(result.ToLocalChecked());
 }
 
-static void ICUErrorName(const FunctionCallbackInfo<Value>& args) {
+void ICUErrorName(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   UErrorCode status = static_cast<UErrorCode>(args[0]->Int32Value());
   args.GetReturnValue().Set(
@@ -344,9 +367,9 @@ static void ICUErrorName(const FunctionCallbackInfo<Value>& args) {
  * @param status ICU error status. If failure, assume result is undefined.
  * @return version number, or NULL. May or may not be buf.
  */
-static const char* GetVersion(const char* type,
-                              char buf[U_MAX_VERSION_STRING_LENGTH],
-                              UErrorCode* status) {
+const char* GetVersion(const char* type,
+                       char buf[U_MAX_VERSION_STRING_LENGTH],
+                       UErrorCode* status) {
   if (!strcmp(type, TYPE_ICU)) {
     return U_ICU_VERSION;
   } else if (!strcmp(type, TYPE_UNICODE)) {
@@ -365,7 +388,7 @@ static const char* GetVersion(const char* type,
   return nullptr;
 }
 
-static void GetVersion(const FunctionCallbackInfo<Value>& args) {
+void GetVersion(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   if ( args.Length() == 0 ) {
     // With no args - return a comma-separated list of allowed values
@@ -391,6 +414,8 @@ static void GetVersion(const FunctionCallbackInfo<Value>& args) {
     }
   }
 }
+
+}  // anonymous namespace
 
 bool InitializeICUDirectory(const std::string& path) {
   if (path.empty()) {

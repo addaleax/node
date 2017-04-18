@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #ifndef SRC_ENV_H_
 #define SRC_ENV_H_
 
@@ -15,6 +36,7 @@
 #include "uv.h"
 #include "v8.h"
 
+#include <list>
 #include <stdint.h>
 #include <vector>
 
@@ -34,14 +56,6 @@ namespace node {
 // worst case we pay a one-time penalty for resizing the array.
 #ifndef NODE_CONTEXT_EMBEDDER_DATA_INDEX
 #define NODE_CONTEXT_EMBEDDER_DATA_INDEX 32
-#endif
-
-// The slot 0 and 1 had already been taken by "gin" and "blink" in Chrome,
-// and the size of isolate's slots is 4 by default, so using 3 should
-// hopefully make node work independently when embedded into other
-// application.
-#ifndef NODE_ISOLATE_SLOT
-#define NODE_ISOLATE_SLOT 3
 #endif
 
 // The number of items passed to push_values_to_array_function has diminishing
@@ -114,6 +128,8 @@ namespace node {
   V(fingerprint_string, "fingerprint")                                        \
   V(flags_string, "flags")                                                    \
   V(get_string, "get")                                                        \
+  V(get_data_clone_error_string, "_getDataCloneError")                        \
+  V(get_shared_array_buffer_id_string, "_getSharedArrayBufferId")             \
   V(gid_string, "gid")                                                        \
   V(handle_string, "handle")                                                  \
   V(homedir_string, "homedir")                                                \
@@ -176,6 +192,7 @@ namespace node {
   V(priority_string, "priority")                                              \
   V(produce_cached_data_string, "produceCachedData")                          \
   V(raw_string, "raw")                                                        \
+  V(read_host_object_string, "_readHostObject")                               \
   V(readable_string, "readable")                                              \
   V(received_shutdown_string, "receivedShutdown")                             \
   V(refresh_string, "refresh")                                                \
@@ -224,6 +241,7 @@ namespace node {
   V(windows_verbatim_arguments_string, "windowsVerbatimArguments")            \
   V(wrap_string, "wrap")                                                      \
   V(writable_string, "writable")                                              \
+  V(write_host_object_string, "_writeHostObject")                             \
   V(write_queue_size_string, "writeQueueSize")                                \
   V(x_forwarded_string, "x-forwarded-for")                                    \
   V(zero_return_string, "ZERO_RETURN")                                        \
@@ -240,7 +258,6 @@ namespace node {
   V(context, v8::Context)                                                     \
   V(domain_array, v8::Array)                                                  \
   V(domains_stack_array, v8::Array)                                           \
-  V(fs_stats_constructor_function, v8::Function)                              \
   V(generic_internal_field_template, v8::ObjectTemplate)                      \
   V(jsstream_constructor_template, v8::FunctionTemplate)                      \
   V(module_load_list_array, v8::Array)                                        \
@@ -257,6 +274,7 @@ namespace node {
   V(tls_wrap_constructor_template, v8::FunctionTemplate)                      \
   V(tty_constructor_template, v8::FunctionTemplate)                           \
   V(udp_constructor_function, v8::Function)                                   \
+  V(url_constructor_function, v8::Function)                                   \
   V(write_wrap_constructor_function, v8::Function)                            \
 
 class Environment;
@@ -479,6 +497,9 @@ class Environment {
   inline char* http_parser_buffer() const;
   inline void set_http_parser_buffer(char* buffer);
 
+  inline double* fs_stats_field_array() const;
+  inline void set_fs_stats_field_array(double* fields);
+
   inline void ThrowError(const char* errmsg);
   inline void ThrowTypeError(const char* errmsg);
   inline void ThrowRangeError(const char* errmsg);
@@ -509,6 +530,9 @@ class Environment {
                                 v8::FunctionCallback callback);
 
   inline v8::Local<v8::Object> NewInternalFieldObject();
+
+  void AtExit(void (*cb)(void* arg), void* arg);
+  void RunAtExitCallbacks();
 
   // Strings and private symbols are shared across shared contexts
   // The getters simply proxy to the per-isolate primitive.
@@ -586,6 +610,14 @@ class Environment {
   double* heap_space_statistics_buffer_ = nullptr;
 
   char* http_parser_buffer_;
+
+  double* fs_stats_field_array_;
+
+  struct AtExitCallback {
+    void (*cb_)(void* arg);
+    void* arg_;
+  };
+  std::list<AtExitCallback> at_exit_functions_;
 
 #define V(PropertyName, TypeName)                                             \
   v8::Persistent<TypeName> PropertyName ## _;
