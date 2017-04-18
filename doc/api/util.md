@@ -436,7 +436,7 @@ async function callStat() {
 }
 ```
 
-If there is a `function[util.promisify.custom]` property present, `promisify`
+If there is a `original[util.promisify.custom]` property present, `promisify`
 will return its value, see [Custom promisified functions][].
 
 If `original` is declared as an `async function`, `original` itself is returned.

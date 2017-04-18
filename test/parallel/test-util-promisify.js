@@ -30,6 +30,7 @@ const stat = promisify(fs.stat);
   function promisifedFn() {}
   fn[promisify.custom] = promisifedFn;
   assert.strictEqual(promisify(fn), promisifedFn);
+  assert.strictEqual(promisify(promisify(fn)), promisifedFn);
 }
 
 {
