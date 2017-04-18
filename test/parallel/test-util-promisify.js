@@ -1,9 +1,11 @@
 'use strict';
+// Flags: --expose-internals
 const common = require('../common');
 const assert = require('assert');
 const fs = require('fs');
 const vm = require('vm');
 const { promisify } = require('util');
+const { customPromisifyArgs } = require('internal/util');
 
 // Crash the process on unhandled rejections.
 process.on('unhandledRejection', (err) => setImmediate(() => { throw err; }));
@@ -30,6 +32,21 @@ const stat = promisify(fs.stat);
   function promisifedFn() {}
   fn[promisify.custom] = promisifedFn;
   assert.strictEqual(promisify(fn), promisifedFn);
+}
+
+{
+  const firstValue = 5;
+  const secondValue = 17;
+
+  function fn(callback) {
+    callback(null, firstValue, secondValue);
+  }
+
+  fn[customPromisifyArgs] = ['first', 'second'];
+
+  promisify(fn)().then(common.mustCall((obj) => {
+    assert.deepStrictEqual(obj, {first: firstValue, second: secondValue});
+  }));
 }
 
 {
