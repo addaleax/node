@@ -215,6 +215,20 @@ replace the existing process and uses a shell to execute the command.*
 If this method is invoked as its [`util.promisify()`][]ed version, it returns
 a Promise for an object with `stdout` and `stderr` properties.
 
+For example: 
+
+```js
+const util = require("util");
+const exec = util.promisify(require('child_process').exec);
+
+async function lsExample() {
+  const {stdout, stderr} = await exec('ls');
+  console.log('stdout:', stdout);
+  console.log('stderr:', stderr);
+}
+lsExample();
+```
+
 ### child_process.execFile(file[, args][, options][, callback])
 <!-- YAML
 added: v0.1.91
@@ -266,6 +280,16 @@ encoding, `Buffer` objects will be passed to the callback instead.
 
 If this method is invoked as its [`util.promisify()`][]ed version, it returns
 a Promise for an object with `stdout` and `stderr` properties.
+
+```js
+const util = require("util");
+const execFile =  util.promisify(require('child_process').execFile);
+async function getVersion() {
+  const {stdout} = await execFile('node', ['--version']);
+  console.log(stdout);
+}
+getVersion();
+```
 
 ### child_process.fork(modulePath[, args][, options])
 <!-- YAML
