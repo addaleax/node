@@ -17,22 +17,12 @@ const setImmediate = promisify(timers.setImmediate);
   promise.then(common.mustCall((value) => {
     assert.strictEqual(value, undefined);
   }));
-  assert.strictEqual(promise.timer.constructor.name, 'Timeout');
 }
 
 {
   const promise = setTimeout(1, 'foobar');
   promise.then(common.mustCall((value) => {
     assert.strictEqual(value, 'foobar');
-  }));
-  assert.strictEqual(promise.timer.constructor.name, 'Timeout');
-}
-
-{
-  const promise = setTimeout(1, 'foobar');
-  process.nextTick(common.mustCall(() => clearTimeout(promise)));
-  promise.then(common.mustCall((value) => {
-    assert.strictEqual(value, undefined);
   }));
 }
 
@@ -41,21 +31,11 @@ const setImmediate = promisify(timers.setImmediate);
   promise.then(common.mustCall((value) => {
     assert.strictEqual(value, undefined);
   }));
-  assert.strictEqual(promise.timer.constructor.name, 'Immediate');
 }
 
 {
   const promise = setImmediate('foobar');
   promise.then(common.mustCall((value) => {
     assert.strictEqual(value, 'foobar');
-  }));
-  assert.strictEqual(promise.timer.constructor.name, 'Immediate');
-}
-
-{
-  const promise = setImmediate('foobar');
-  process.nextTick(common.mustCall(() => clearImmediate(promise)));
-  promise.then(common.mustCall((value) => {
-    assert.strictEqual(value, undefined);
   }));
 }

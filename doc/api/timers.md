@@ -98,9 +98,6 @@ setImmediatePromise('foobar').then((value) => {
 });
 ```
 
-That promise can still be passed to [`clearImmediate()`][], which then
-resolves immediately with a value of `undefined`.
-
 ### setInterval(callback, delay[, ...args])
 <!-- YAML
 added: v0.0.1
@@ -155,9 +152,6 @@ setTimeoutPromise(40, 'foobar').then((value) => {
 });
 ```
 
-That promise can still be passed to [`clearTimeout()`][], which then
-resolves immediately with a value of `undefined`.
-
 ## Cancelling Timers
 
 The [`setImmediate()`][], [`setInterval()`][], and [`setTimeout()`][] methods
@@ -169,11 +163,10 @@ cancel the timer and prevent it from triggering.
 added: v0.9.1
 -->
 
-* `immediate` {Immediate|Promise} An `Immediate` object as returned by
+* `immediate` {Immediate} An `Immediate` object as returned by
   [`setImmediate()`][].
 
-Cancels an `Immediate` object created by [`setImmediate()`][] or the promisified
-variant of [`setImmediate()`][].
+Cancels an `Immediate` object created by [`setImmediate()`][].
 
 ### clearInterval(timeout)
 <!-- YAML
@@ -189,10 +182,9 @@ Cancels a `Timeout` object created by [`setInterval()`][].
 added: v0.0.1
 -->
 
-* `timeout` {Timeout|Promise} A `Timeout` object as returned by [`setTimeout()`][].
+* `timeout` {Timeout} A `Timeout` object as returned by [`setTimeout()`][].
 
-Cancels a `Timeout` object created by [`setTimeout()`][] or the promisified
-variant of [`setTimeout()`][].
+Cancels a `Timeout` object created by [`setTimeout()`][].
 
 
 [the Node.js Event Loop]: https://nodejs.org/en/docs/guides/event-loop-timers-and-nexttick
