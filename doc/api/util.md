@@ -422,6 +422,7 @@ stat('.').then((stats) => {
   // Handle the error.
 });
 ```
+
 Or, equivalently using `async function`s:
 
 ```js
@@ -436,13 +437,35 @@ async function callStat() {
 }
 ```
 
-If there is a `original[util.promisify.custom]` property present, `promisify`
+If there is an `original[util.promisify.custom]` property present, `promisify`
 will return its value, see [Custom promisified functions][].
 
 If `original` is declared as an `async function`, `original` itself is returned.
 
 If `original` calls its callback argument with more than 2 parameters, a
-Promise for an Array of those parameters is returned instead.
+Promise for an Array of those parameters is returned instead, for example:
+
+```js
+const util = require('util');
+
+function somethingAsync(callback) {
+  // nested within some asynchronous operations:
+  callback(null, 1, 'foo', 42);
+}
+
+const somethingPromisified = util.promisify(somethingAsync);
+
+async function callSomething() {
+  const callbackArgs = await somethingPromisified();
+
+  // Prints: [ 1, 'foo', 42 ]
+  console.log(callbackArgs);
+}
+```
+
+`promisify()` assumes that `original` is a function taking a callback as its
+final argument in all cases, and the returned function will result in undefined
+behaviour if it does not.
 
 ### Custom promisified functions
 
@@ -464,6 +487,9 @@ const promisified = util.promisify(doSomething);
 console.log(promisified === doSomething[util.promisify.custom]);
   // prints 'true'
 ```
+
+This can be useful for cases where the original function does not follow the
+standard formart of taking an error-first callback as the last argument.
 
 ### util.promisify.custom
 <!-- YAML
