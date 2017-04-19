@@ -215,10 +215,10 @@ replace the existing process and uses a shell to execute the command.*
 If this method is invoked as its [`util.promisify()`][]ed version, it returns
 a Promise for an object with `stdout` and `stderr` properties.
 
-For example: 
+For example:
 
 ```js
-const util = require("util");
+const util = require('util');
 const exec = util.promisify(require('child_process').exec);
 
 async function lsExample() {
@@ -282,7 +282,7 @@ If this method is invoked as its [`util.promisify()`][]ed version, it returns
 a Promise for an object with `stdout` and `stderr` properties.
 
 ```js
-const util = require("util");
+const util = require('util');
 const execFile =  util.promisify(require('child_process').execFile);
 async function getVersion() {
   const {stdout} = await execFile('node', ['--version']);
