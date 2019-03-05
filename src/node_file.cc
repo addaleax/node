@@ -106,14 +106,17 @@ typedef void(*uv_fs_callback_t)(uv_fs_t*);
 // The FileHandle object wraps a file descriptor and will close it on garbage
 // collection if necessary. If that happens, a process warning will be
 // emitted (or a fatal exception will occur if the fd cannot be closed.)
-FileHandle::FileHandle(Environment* env, Local<Object> obj, int fd)
+FileHandle::FileHandle(Environment* env, BindingData* binding_data,
+                       Local<Object> obj, int fd)
     : AsyncWrap(env, obj, AsyncWrap::PROVIDER_FILEHANDLE),
       StreamBase(env),
-      fd_(fd) {
+      fd_(fd),
+      binding_data_(binding_data) {
   MakeWeak();
 }
 
-FileHandle* FileHandle::New(Environment* env, int fd, Local<Object> obj) {
+FileHandle* FileHandle::New(Environment* env, BindingData* binding_data,
+                            int fd, Local<Object> obj) {
   if (obj.IsEmpty() && !env->fd_constructor_template()
                             ->NewInstance(env->context())
                             .ToLocal(&obj)) {
@@ -128,16 +131,18 @@ FileHandle* FileHandle::New(Environment* env, int fd, Local<Object> obj) {
           .IsNothing()) {
     return nullptr;
   }
-  return new FileHandle(env, obj, fd);
+  return new FileHandle(env, binding_data, obj, fd);
 }
 
 void FileHandle::New(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
+  BindingData* binding_data = Environment::GetBindingData<BindingData>(args);
   CHECK(args.IsConstructCall());
   CHECK(args[0]->IsInt32());
 
   FileHandle* handle =
-      FileHandle::New(env, args[0].As<Int32>()->Value(), args.This());
+      FileHandle::New(env, binding_data, args[0].As<Int32>()->Value(),
+                      args.This());
   if (handle == nullptr) return;
   if (args[1]->IsNumber())
     handle->read_offset_ = args[1]->IntegerValue(env->context()).FromJust();
@@ -326,7 +331,7 @@ int FileHandle::ReadStart() {
     HandleScope handle_scope(env()->isolate());
     AsyncHooks::DefaultTriggerAsyncIdScope trigger_scope(this);
 
-    auto& freelist = env()->file_handle_read_wrap_freelist();
+    auto& freelist = binding_data_->file_handle_read_wrap_freelist;
     if (freelist.size() > 0) {
       read_wrap = std::move(freelist.back());
       freelist.pop_back();
@@ -378,7 +383,7 @@ int FileHandle::ReadStart() {
     // Push the read wrap back to the freelist, or let it be destroyed
     // once we’re exiting the current scope.
     constexpr size_t wanted_freelist_fill = 100;
-    auto& freelist = handle->env()->file_handle_read_wrap_freelist();
+    auto& freelist = handle->binding_data_->file_handle_read_wrap_freelist;
     if (freelist.size() < wanted_freelist_fill) {
       read_wrap->Reset();
       freelist.emplace_back(std::move(read_wrap));
@@ -448,7 +453,7 @@ void FSReqCallback::Reject(Local<Value> reject) {
 }
 
 void FSReqCallback::ResolveStat(const uv_stat_t* stat) {
-  Resolve(FillGlobalStatsArray(env(), use_bigint(), stat));
+  Resolve(FillGlobalStatsArray(binding_data(), use_bigint(), stat));
 }
 
 void FSReqCallback::Resolve(Local<Value> value) {
@@ -468,7 +473,8 @@ void FSReqCallback::SetReturnValue(const FunctionCallbackInfo<Value>& args) {
 void NewFSReqCallback(const FunctionCallbackInfo<Value>& args) {
   CHECK(args.IsConstructCall());
   Environment* env = Environment::GetCurrent(args);
-  new FSReqCallback(env, args.This(), args[0]->IsTrue());
+  BindingData* binding_data = Environment::GetBindingData<BindingData>(args);
+  new FSReqCallback(env, binding_data, args.This(), args[0]->IsTrue());
 }
 
 FSReqAfterScope::FSReqAfterScope(FSReqBase* wrap, uv_fs_t* req)
@@ -540,7 +546,9 @@ void AfterOpenFileHandle(uv_fs_t* req) {
   FSReqAfterScope after(req_wrap, req);
 
   if (after.Proceed()) {
-    FileHandle* fd = FileHandle::New(req_wrap->env(), req->result);
+    FileHandle* fd = FileHandle::New(req_wrap->env(),
+                                     req_wrap->binding_data(),
+                                     req->result);
     if (fd == nullptr) return;
     req_wrap->Resolve(fd->object());
   }
@@ -2132,6 +2140,10 @@ void Initialize(Local<Object> target,
                 void* priv) {
   Environment* env = Environment::GetCurrent(context);
   Isolate* isolate = env->isolate();
+  Environment::BindingScope<BindingData> binding_scope(env,
+                                                       BindingData(isolate));
+  BindingData* binding_data = binding_scope.data;
+  if (binding_data == nullptr) return;
 
   env->SetMethod(target, "access", Access);
   env->SetMethod(target, "close", Close);
@@ -2180,11 +2192,11 @@ void Initialize(Local<Object> target,
 
   target->Set(context,
               FIXED_ONE_BYTE_STRING(isolate, "statValues"),
-              env->fs_stats_field_array()->GetJSArray()).FromJust();
+              binding_data->stats_field_array.GetJSArray()).FromJust();
 
   target->Set(context,
               FIXED_ONE_BYTE_STRING(isolate, "bigintStatValues"),
-              env->fs_stats_field_bigint_array()->GetJSArray()).FromJust();
+              binding_data->stats_field_bigint_array.GetJSArray()).FromJust();
 
   StatWatcher::Initialize(env, target);
 

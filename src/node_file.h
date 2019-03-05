@@ -21,6 +21,26 @@ using v8::Value;
 
 namespace fs {
 
+class FileHandleReadWrap;
+
+struct BindingData {
+  explicit BindingData(v8::Isolate* isolate)
+    : stats_field_array(isolate, kFsStatsBufferLength),
+      stats_field_bigint_array(isolate, kFsStatsBufferLength) {}
+
+  ~BindingData() {
+    // Make sure there are no re-used libuv wrapper objects.
+    // Environment::CleanupHandles() should have removed all of them.
+    CHECK(file_handle_read_wrap_freelist.empty());
+  }
+
+  AliasedBuffer<double, v8::Float64Array> stats_field_array;
+  AliasedBuffer<uint64_t, v8::BigUint64Array> stats_field_bigint_array;
+
+  std::vector<std::unique_ptr<fs::FileHandleReadWrap>>
+      file_handle_read_wrap_freelist;
+};
+
 // structure used to store state during a complex operation, e.g., mkdirp.
 class FSContinuationData : public MemoryRetainer {
  public:
@@ -68,9 +88,11 @@ class FSReqBase : public ReqWrap<uv_fs_t> {
   typedef MaybeStackBuffer<char, 64> FSReqBuffer;
   std::unique_ptr<FSContinuationData> continuation_data = nullptr;
 
-  FSReqBase(Environment* env, Local<Object> req, AsyncWrap::ProviderType type,
-            bool use_bigint)
-      : ReqWrap(env, req, type), use_bigint_(use_bigint) {
+  FSReqBase(Environment* env, BindingData* binding_data, Local<Object> req,
+            AsyncWrap::ProviderType type, bool use_bigint)
+      : ReqWrap(env, req, type),
+        use_bigint_(use_bigint),
+        binding_data_(binding_data) {
   }
 
   void Init(const char* syscall,
@@ -114,11 +136,15 @@ class FSReqBase : public ReqWrap<uv_fs_t> {
     return static_cast<FSReqBase*>(ReqWrap::from_req(req));
   }
 
+  BindingData* binding_data() { return binding_data_; }
+
  private:
   enum encoding encoding_ = UTF8;
   bool has_data_ = false;
-  const char* syscall_ = nullptr;
   bool use_bigint_ = false;
+  const char* syscall_ = nullptr;
+
+  BindingData* binding_data_;
 
   // Typically, the content of buffer_ is something like a file name, so
   // something around 64 bytes should be enough.
@@ -129,8 +155,10 @@ class FSReqBase : public ReqWrap<uv_fs_t> {
 
 class FSReqCallback : public FSReqBase {
  public:
-  FSReqCallback(Environment* env, Local<Object> req, bool use_bigint)
-      : FSReqBase(env, req, AsyncWrap::PROVIDER_FSREQCALLBACK, use_bigint) { }
+  FSReqCallback(Environment* env, BindingData* binding_data, Local<Object> req,
+                bool use_bigint)
+      : FSReqBase(env, binding_data, req,
+                  AsyncWrap::PROVIDER_FSREQCALLBACK, use_bigint) { }
 
   void Reject(Local<Value> reject) override;
   void Resolve(Local<Value> value) override;
@@ -210,17 +238,17 @@ constexpr void FillStatsArray(AliasedBuffer<NativeT, V8T>* fields,
   fields->SetValue(offset + 13, ToNative<NativeT>(s->st_birthtim));
 }
 
-inline Local<Value> FillGlobalStatsArray(Environment* env,
+inline Local<Value> FillGlobalStatsArray(BindingData* binding_data,
                                          const bool use_bigint,
                                          const uv_stat_t* s,
                                          const bool second = false) {
   const ptrdiff_t offset = second ? kFsStatsFieldsNumber : 0;
   if (use_bigint) {
-    auto* const arr = env->fs_stats_field_bigint_array();
+    auto* const arr = &binding_data->stats_field_bigint_array;
     FillStatsArray(arr, s, offset);
     return arr->GetJSArray();
   } else {
-    auto* const arr = env->fs_stats_field_array();
+    auto* const arr = &binding_data->stats_field_array;
     FillStatsArray(arr, s, offset);
     return arr->GetJSArray();
   }
@@ -229,7 +257,8 @@ inline Local<Value> FillGlobalStatsArray(Environment* env,
 template <typename NativeT = double, typename V8T = v8::Float64Array>
 class FSReqPromise : public FSReqBase {
  public:
-  static FSReqPromise* New(Environment* env, bool use_bigint) {
+  static FSReqPromise* New(Environment* env, BindingData* binding_data,
+                           bool use_bigint) {
     v8::Local<Object> obj;
     if (!env->fsreqpromise_constructor_template()
              ->NewInstance(env->context())
@@ -241,7 +270,7 @@ class FSReqPromise : public FSReqBase {
         obj->Set(env->context(), env->promise_string(), resolver).IsNothing()) {
       return nullptr;
     }
-    return new FSReqPromise(env, obj, use_bigint);
+    return new FSReqPromise(env, binding_data, obj, use_bigint);
   }
 
   ~FSReqPromise() override {
@@ -298,8 +327,10 @@ class FSReqPromise : public FSReqBase {
   FSReqPromise& operator=(const FSReqPromise&&) = delete;
 
  private:
-  FSReqPromise(Environment* env, v8::Local<v8::Object> obj, bool use_bigint)
-      : FSReqBase(env, obj, AsyncWrap::PROVIDER_FSREQPROMISE, use_bigint),
+  FSReqPromise(Environment* env, BindingData* binding_data,
+               v8::Local<v8::Object> obj, bool use_bigint)
+      : FSReqBase(env, binding_data, obj, AsyncWrap::PROVIDER_FSREQPROMISE,
+                  use_bigint),
         stats_field_array_(env->isolate(), kFsStatsFieldsNumber) {}
 
   bool finished_ = false;
@@ -355,6 +386,7 @@ class FileHandleReadWrap : public ReqWrap<uv_fs_t> {
 class FileHandle : public AsyncWrap, public StreamBase {
  public:
   static FileHandle* New(Environment* env,
+                         BindingData* binding_data,
                          int fd,
                          v8::Local<v8::Object> obj = v8::Local<v8::Object>());
   ~FileHandle() override;
@@ -402,7 +434,8 @@ class FileHandle : public AsyncWrap, public StreamBase {
   FileHandle& operator=(const FileHandle&&) = delete;
 
  private:
-  FileHandle(Environment* env, v8::Local<v8::Object> obj, int fd);
+  FileHandle(Environment* env, BindingData* binding_data,
+             v8::Local<v8::Object> obj, int fd);
 
   // Synchronous close that emits a warning
   void Close();
@@ -464,6 +497,8 @@ class FileHandle : public AsyncWrap, public StreamBase {
 
   bool reading_ = false;
   std::unique_ptr<FileHandleReadWrap> current_read_ = nullptr;
+
+  BindingData* binding_data_;
 };
 
 }  // namespace fs

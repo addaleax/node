@@ -52,10 +52,6 @@ namespace contextify {
 class ContextifyScript;
 }
 
-namespace fs {
-class FileHandleReadWrap;
-}
-
 namespace performance {
 class performance_state;
 }
@@ -813,13 +809,6 @@ class Environment {
   inline void set_debug_enabled(DebugCategory category, bool enabled);
   void set_debug_categories(const std::string& cats, bool enabled);
 
-  inline AliasedBuffer<double, v8::Float64Array>* fs_stats_field_array();
-  inline AliasedBuffer<uint64_t, v8::BigUint64Array>*
-      fs_stats_field_bigint_array();
-
-  inline std::vector<std::unique_ptr<fs::FileHandleReadWrap>>&
-      file_handle_read_wrap_freelist();
-
   inline performance::performance_state* performance_state();
   inline std::unordered_map<std::string, uint64_t>* performance_marks();
 
@@ -1117,12 +1106,6 @@ class Environment {
   int request_waiting_ = 0;
 
   bool debug_enabled_[static_cast<int>(DebugCategory::CATEGORY_COUNT)] = {0};
-
-  AliasedBuffer<double, v8::Float64Array> fs_stats_field_array_;
-  AliasedBuffer<uint64_t, v8::BigUint64Array> fs_stats_field_bigint_array_;
-
-  std::vector<std::unique_ptr<fs::FileHandleReadWrap>>
-      file_handle_read_wrap_freelist_;
 
   worker::Worker* worker_context_ = nullptr;
 

@@ -1,8 +1,8 @@
 #include "async_wrap.h"
+#include "base_object-inl.h"
 #include "node_buffer.h"
 #include "node_context_data.h"
 #include "node_errors.h"
-#include "node_file.h"
 #include "node_internals.h"
 #include "node_native_module.h"
 #include "node_options-inl.h"
@@ -10,6 +10,7 @@
 #include "node_process.h"
 #include "node_v8_platform-inl.h"
 #include "node_worker.h"
+#include "stream_base.h"
 #include "tracing/agent.h"
 #include "tracing/traced_value.h"
 #include "v8-profiler.h"
@@ -31,6 +32,7 @@ using v8::HandleScope;
 using v8::Integer;
 using v8::Isolate;
 using v8::Local;
+using v8::MaybeLocal;
 using v8::Message;
 using v8::NewStringType;
 using v8::Number;
@@ -189,8 +191,6 @@ Environment::Environment(IsolateData* isolate_data,
       stream_base_state_(isolate_, StreamBase::kNumStreamBaseStateFields),
       flags_(flags),
       thread_id_(thread_id == kNoThreadId ? AllocateThreadId() : thread_id),
-      fs_stats_field_array_(isolate_, kFsStatsBufferLength),
-      fs_stats_field_bigint_array_(isolate_, kFsStatsBufferLength),
       context_(context->GetIsolate(), context) {
   // We'll be creating new objects so make sure we've entered the context.
   HandleScope handle_scope(isolate());
@@ -273,10 +273,6 @@ CompileFnEntry::CompileFnEntry(Environment* env, uint32_t id)
 Environment::~Environment() {
   isolate()->GetHeapProfiler()->RemoveBuildEmbedderGraphCallback(
       BuildEmbedderGraph, this);
-
-  // Make sure there are no re-used libuv wrapper objects.
-  // CleanupHandles() should have removed all of them.
-  CHECK(file_handle_read_wrap_freelist_.empty());
 
   // dispose the Persistent references to the compileFunction
   // wrappers used in the dynamic import callback
@@ -449,8 +445,6 @@ void Environment::CleanupHandles() {
          !handle_wrap_queue_.IsEmpty()) {
     uv_run(event_loop(), UV_RUN_ONCE);
   }
-
-  file_handle_read_wrap_freelist_.clear();
 }
 
 void Environment::StartProfilerIdleNotifier() {
