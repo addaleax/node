@@ -31,7 +31,6 @@
 #include "handle_wrap.h"
 #include "node.h"
 #include "node_binding.h"
-#include "node_http2_state.h"
 #include "node_options.h"
 #include "req_wrap.h"
 #include "util.h"
@@ -821,9 +820,6 @@ class Environment {
   inline bool http_parser_buffer_in_use() const;
   inline void set_http_parser_buffer_in_use(bool in_use);
 
-  inline http2::Http2State* http2_state() const;
-  inline void set_http2_state(std::unique_ptr<http2::Http2State> state);
-
   inline bool debug_enabled(DebugCategory category) const;
   inline void set_debug_enabled(DebugCategory category, bool enabled);
   void set_debug_categories(const std::string& cats, bool enabled);
@@ -1136,7 +1132,6 @@ class Environment {
 
   char* http_parser_buffer_ = nullptr;
   bool http_parser_buffer_in_use_ = false;
-  std::unique_ptr<http2::Http2State> http2_state_;
 
   bool debug_enabled_[static_cast<int>(DebugCategory::CATEGORY_COUNT)] = {0};
 

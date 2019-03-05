@@ -3,7 +3,6 @@
 #include "node.h"
 #include "node_buffer.h"
 #include "node_http2.h"
-#include "node_http2_state.h"
 #include "node_perf.h"
 #include "util.h"
 
@@ -97,7 +96,9 @@ Http2Scope::~Http2Scope() {
 // instances to configure an appropriate nghttp2_options struct. The class
 // uses a single TypedArray instance that is shared with the JavaScript side
 // to more efficiently pass values back and forth.
-Http2Options::Http2Options(Environment* env, nghttp2_session_type type) {
+Http2Options::Http2Options(Environment* env,
+                           Http2State* http2_state,
+                           nghttp2_session_type type) {
   nghttp2_option_new(&options_);
 
   // Make sure closed connections aren't kept around, taking up memory.
@@ -119,8 +120,7 @@ Http2Options::Http2Options(Environment* env, nghttp2_session_type type) {
     nghttp2_option_set_builtin_recv_extension_type(options_, NGHTTP2_ORIGIN);
   }
 
-  AliasedBuffer<uint32_t, Uint32Array>& buffer =
-      env->http2_state()->options_buffer;
+  AliasedBuffer<uint32_t, Uint32Array>& buffer = http2_state->options_buffer;
   uint32_t flags = buffer[IDX_OPTIONS_FLAGS];
 
   if (flags & (1 << IDX_OPTIONS_MAX_DEFLATE_DYNAMIC_TABLE_SIZE)) {
@@ -199,9 +199,8 @@ Http2Options::Http2Options(Environment* env, nghttp2_session_type type) {
   }
 }
 
-void Http2Session::Http2Settings::Init() {
-  AliasedBuffer<uint32_t, Uint32Array>& buffer =
-      env()->http2_state()->settings_buffer;
+void Http2Session::Http2Settings::Init(Http2State* http2_state) {
+  AliasedBuffer<uint32_t, Uint32Array>& buffer = http2_state->settings_buffer;
   uint32_t flags = buffer[IDX_SETTINGS_COUNT];
 
   size_t n = 0;
@@ -233,12 +232,13 @@ void Http2Session::Http2Settings::Init() {
 // that is shared with the JavaScript side.
 Http2Session::Http2Settings::Http2Settings(Environment* env,
                                            Http2Session* session,
+                                           Http2State* http2_state,
                                            Local<Object> obj,
                                            uint64_t start_time)
     : AsyncWrap(env, obj, PROVIDER_HTTP2SETTINGS),
       session_(session),
       startTime_(start_time) {
-  Init();
+  Init(http2_state);
 }
 
 // Generates a Buffer that contains the serialized payload of a SETTINGS
@@ -259,11 +259,10 @@ Local<Value> Http2Session::Http2Settings::Pack() {
 
 // Updates the shared TypedArray with the current remote or local settings for
 // the session.
-void Http2Session::Http2Settings::Update(Environment* env,
-                                         Http2Session* session,
+void Http2Session::Http2Settings::Update(Http2Session* session,
                                          get_setting fn) {
   AliasedBuffer<uint32_t, Uint32Array>& buffer =
-      env->http2_state()->settings_buffer;
+      session->http2_state()->settings_buffer;
   buffer[IDX_SETTINGS_HEADER_TABLE_SIZE] =
       fn(**session, NGHTTP2_SETTINGS_HEADER_TABLE_SIZE);
   buffer[IDX_SETTINGS_MAX_CONCURRENT_STREAMS] =
@@ -281,9 +280,8 @@ void Http2Session::Http2Settings::Update(Environment* env,
 }
 
 // Initializes the shared TypedArray with the default settings values.
-void Http2Session::Http2Settings::RefreshDefaults(Environment* env) {
-  AliasedBuffer<uint32_t, Uint32Array>& buffer =
-      env->http2_state()->settings_buffer;
+void Http2Session::Http2Settings::RefreshDefaults(Http2State* http2_state) {
+  AliasedBuffer<uint32_t, Uint32Array>& buffer = http2_state->settings_buffer;
 
   buffer[IDX_SETTINGS_HEADER_TABLE_SIZE] =
       DEFAULT_SETTINGS_HEADER_TABLE_SIZE;
@@ -588,14 +586,16 @@ void Http2Session::StopTrackingRcbuf(nghttp2_rcbuf* buf) {
 
 Http2Session::Http2Session(Environment* env,
                            Local<Object> wrap,
+                           Http2State* http2_state,
                            nghttp2_session_type type)
     : AsyncWrap(env, wrap, AsyncWrap::PROVIDER_HTTP2SESSION),
-      session_type_(type) {
+      session_type_(type),
+      http2_state_(http2_state) {
   MakeWeak();
   statistics_.start_time = uv_hrtime();
 
   // Capture the configuration options for this session
-  Http2Options opts(env, type);
+  Http2Options opts(env, http2_state, type);
 
   max_session_memory_ = opts.GetMaxSessionMemory();
 
@@ -654,10 +654,12 @@ inline bool HasHttp2Observer(Environment* env) {
 }
 
 void Http2Stream::EmitStatistics() {
+  CHECK_NOT_NULL(session());
   if (!HasHttp2Observer(env()))
     return;
   Http2StreamPerformanceEntry* entry =
-    new Http2StreamPerformanceEntry(env(), id_, statistics_);
+      new Http2StreamPerformanceEntry(env(), session()->http2_state(), id_,
+                                      statistics_);
   env()->SetImmediate([](Environment* env, void* data) {
     // This takes ownership, the entry is destroyed at the end of this scope.
     std::unique_ptr<Http2StreamPerformanceEntry> entry {
@@ -666,7 +668,7 @@ void Http2Stream::EmitStatistics() {
       return;
     HandleScope handle_scope(env->isolate());
     AliasedBuffer<double, Float64Array>& buffer =
-        env->http2_state()->stream_stats_buffer;
+        entry->http2_state()->stream_stats_buffer;
     buffer[IDX_STREAM_STATS_ID] = entry->id();
     if (entry->first_byte() != 0) {
       buffer[IDX_STREAM_STATS_TIMETOFIRSTBYTE] =
@@ -697,7 +699,8 @@ void Http2Session::EmitStatistics() {
   if (!HasHttp2Observer(env()))
     return;
   Http2SessionPerformanceEntry* entry =
-    new Http2SessionPerformanceEntry(env(), statistics_, session_type_);
+      new Http2SessionPerformanceEntry(env(), http2_state(), statistics_,
+                                       session_type_);
   env()->SetImmediate([](Environment* env, void* data) {
     // This takes ownership, the entr is destroyed at the end of this scope.
     std::unique_ptr<Http2SessionPerformanceEntry> entry {
@@ -706,7 +709,7 @@ void Http2Session::EmitStatistics() {
       return;
     HandleScope handle_scope(env->isolate());
     AliasedBuffer<double, Float64Array>& buffer =
-        env->http2_state()->session_stats_buffer;
+        entry->http2_state()->session_stats_buffer;
     buffer[IDX_SESSION_STATS_TYPE] = entry->type();
     buffer[IDX_SESSION_STATS_PINGRTT] = entry->ping_rtt() / 1e6;
     buffer[IDX_SESSION_STATS_FRAMESRECEIVED] = entry->frame_count();
@@ -840,7 +843,7 @@ ssize_t Http2Session::OnCallbackPadding(size_t frameLen,
   Context::Scope context_scope(context);
 
   AliasedBuffer<uint32_t, Uint32Array>& buffer =
-      env()->http2_state()->padding_buffer;
+      http2_state()->padding_buffer;
   buffer[PADDING_BUF_FRAME_LENGTH] = frameLen;
   buffer[PADDING_BUF_MAX_PAYLOAD_LENGTH] = maxPayloadLen;
   buffer[PADDING_BUF_RETURN_VALUE] = frameLen;
@@ -2334,6 +2337,7 @@ void HttpErrorString(const FunctionCallbackInfo<Value>& args) {
 // output for an HTTP2-Settings header field.
 void PackSettings(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
+  Http2State* state = Environment::GetBindingData<Http2State>(args);
   // TODO(addaleax): We should not be creating a full AsyncWrap for this.
   Local<Object> obj;
   if (!env->http2settings_constructor_template()
@@ -2341,7 +2345,7 @@ void PackSettings(const FunctionCallbackInfo<Value>& args) {
            .ToLocal(&obj)) {
     return;
   }
-  Http2Session::Http2Settings settings(env, nullptr, obj);
+  Http2Session::Http2Settings settings(env, nullptr, state, obj);
   args.GetReturnValue().Set(settings.Pack());
 }
 
@@ -2349,8 +2353,8 @@ void PackSettings(const FunctionCallbackInfo<Value>& args) {
 // default SETTINGS. RefreshDefaultSettings updates that TypedArray with the
 // default values.
 void RefreshDefaultSettings(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args);
-  Http2Session::Http2Settings::RefreshDefaults(env);
+  Http2State* state = Environment::GetBindingData<Http2State>(args);
+  Http2Session::Http2Settings::RefreshDefaults(state);
 }
 
 // Sets the next stream ID the Http2Session. If successful, returns true.
@@ -2372,10 +2376,9 @@ void Http2Session::SetNextStreamID(const FunctionCallbackInfo<Value>& args) {
 // values established for each of the settings so those can be read in JS land.
 template <get_setting fn>
 void Http2Session::RefreshSettings(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args);
   Http2Session* session;
   ASSIGN_OR_RETURN_UNWRAP(&session, args.Holder());
-  Http2Settings::Update(env, session, fn);
+  Http2Settings::Update(session, fn);
   Debug(session, "settings refreshed for session");
 }
 
@@ -2383,13 +2386,12 @@ void Http2Session::RefreshSettings(const FunctionCallbackInfo<Value>& args) {
 // information of the current Http2Session. This updates the values in the
 // TypedArray so those can be read in JS land.
 void Http2Session::RefreshState(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args);
   Http2Session* session;
   ASSIGN_OR_RETURN_UNWRAP(&session, args.Holder());
   Debug(session, "refreshing state");
 
   AliasedBuffer<double, Float64Array>& buffer =
-      env->http2_state()->session_state_buffer;
+      session->http2_state()->session_state_buffer;
 
   nghttp2_session* s = **session;
 
@@ -2417,10 +2419,11 @@ void Http2Session::RefreshState(const FunctionCallbackInfo<Value>& args) {
 // Constructor for new Http2Session instances.
 void Http2Session::New(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
+  Http2State* state = Environment::GetBindingData<Http2State>(args);
   CHECK(args.IsConstructCall());
   int val = args[0]->IntegerValue(env->context()).ToChecked();
   nghttp2_session_type type = static_cast<nghttp2_session_type>(val);
-  Http2Session* session = new Http2Session(env, args.This(), type);
+  Http2Session* session = new Http2Session(env, args.This(), state, type);
   session->get_async_id();  // avoid compiler warning
   Debug(session, "session created");
 }
@@ -2665,14 +2668,14 @@ void Http2Stream::Priority(const FunctionCallbackInfo<Value>& args) {
 // information about the Http2Stream. This updates the values in that
 // TypedArray so that the state can be read by JS.
 void Http2Stream::RefreshState(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args);
   Http2Stream* stream;
   ASSIGN_OR_RETURN_UNWRAP(&stream, args.Holder());
 
   Debug(stream, "refreshing state");
 
+  CHECK_NOT_NULL(stream->session());
   AliasedBuffer<double, Float64Array>& buffer =
-      env->http2_state()->stream_state_buffer;
+      stream->session()->http2_state()->stream_state_buffer;
 
   nghttp2_stream* str = **stream;
   nghttp2_session* s = **(stream->session());
@@ -2817,7 +2820,8 @@ void Http2Session::Settings(const FunctionCallbackInfo<Value>& args) {
     return;
 
   Http2Session::Http2Settings* settings =
-      new Http2Settings(session->env(), session, obj, 0);
+      new Http2Settings(session->env(), session, session->http2_state(),
+                        obj, 0);
   if (!session->AddSettings(settings)) {
     settings->Done(false);
     return args.GetReturnValue().Set(false);
@@ -2943,9 +2947,11 @@ void Initialize(Local<Object> target,
                 void* priv) {
   Environment* env = Environment::GetCurrent(context);
   Isolate* isolate = env->isolate();
-  HandleScope scope(isolate);
+  HandleScope handle_scope(isolate);
 
-  std::unique_ptr<Http2State> state(new Http2State(isolate));
+  Environment::BindingScope<Http2State> binding_scope(env, Http2State(isolate));
+  Http2State* state = binding_scope.data;
+  if (state == nullptr) return;
 
 #define SET_STATE_TYPEDARRAY(name, field)             \
   target->Set(context,                                \
@@ -2970,8 +2976,6 @@ void Initialize(Local<Object> target,
   SET_STATE_TYPEDARRAY(
     "sessionStats", state->session_stats_buffer.GetJSArray());
 #undef SET_STATE_TYPEDARRAY
-
-  env->set_http2_state(std::move(state));
 
   NODE_DEFINE_CONSTANT(target, PADDING_BUF_FRAME_LENGTH);
   NODE_DEFINE_CONSTANT(target, PADDING_BUF_MAX_PAYLOAD_LENGTH);

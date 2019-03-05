@@ -367,7 +367,9 @@ class Http2Scope {
 // configured.
 class Http2Options {
  public:
-  Http2Options(Environment* env, nghttp2_session_type type);
+  Http2Options(Environment* env,
+               Http2State* http2_state,
+               nghttp2_session_type type);
 
   ~Http2Options() {
     nghttp2_option_del(options_);
@@ -681,6 +683,7 @@ class Http2Session : public AsyncWrap, public StreamListener {
  public:
   Http2Session(Environment* env,
                Local<Object> wrap,
+               Http2State* http2_state,
                nghttp2_session_type type = NGHTTP2_SESSION_SERVER);
   ~Http2Session() override;
 
@@ -805,6 +808,10 @@ class Http2Session : public AsyncWrap, public StreamListener {
 
   uv_loop_t* event_loop() const {
     return env()->event_loop();
+  }
+
+  Http2State* http2_state() {
+    return http2_state_;
   }
 
   Http2Ping* PopPing();
@@ -989,6 +996,8 @@ class Http2Session : public AsyncWrap, public StreamListener {
   std::vector<uint8_t> outgoing_storage_;
   std::vector<int32_t> pending_rst_streams_;
 
+  Http2State* http2_state_;
+
   void CopyDataIntoOutgoing(const uint8_t* src, size_t src_length);
   void ClearOutgoing(int status);
 
@@ -1000,6 +1009,7 @@ class Http2SessionPerformanceEntry : public PerformanceEntry {
  public:
   Http2SessionPerformanceEntry(
       Environment* env,
+      Http2State* http2_state,
       const Http2Session::Statistics& stats,
       nghttp2_session_type type) :
           PerformanceEntry(env, "Http2Session", "http2",
@@ -1013,7 +1023,8 @@ class Http2SessionPerformanceEntry : public PerformanceEntry {
           stream_count_(stats.stream_count),
           max_concurrent_streams_(stats.max_concurrent_streams),
           stream_average_duration_(stats.stream_average_duration),
-          session_type_(type) { }
+          session_type_(type),
+          http2_state_(http2_state) { }
 
   uint64_t ping_rtt() const { return ping_rtt_; }
   uint64_t data_sent() const { return data_sent_; }
@@ -1024,6 +1035,7 @@ class Http2SessionPerformanceEntry : public PerformanceEntry {
   size_t max_concurrent_streams() const { return max_concurrent_streams_; }
   double stream_average_duration() const { return stream_average_duration_; }
   nghttp2_session_type type() const { return session_type_; }
+  Http2State* http2_state() const { return http2_state_; }
 
   void Notify(Local<Value> obj) {
     PerformanceEntry::Notify(env(), kind(), obj);
@@ -1039,12 +1051,14 @@ class Http2SessionPerformanceEntry : public PerformanceEntry {
   size_t max_concurrent_streams_;
   double stream_average_duration_;
   nghttp2_session_type session_type_;
+  Http2State* http2_state_;
 };
 
 class Http2StreamPerformanceEntry : public PerformanceEntry {
  public:
   Http2StreamPerformanceEntry(
       Environment* env,
+      Http2State* http2_state,
       int32_t id,
       const Http2Stream::Statistics& stats) :
           PerformanceEntry(env, "Http2Stream", "http2",
@@ -1055,7 +1069,8 @@ class Http2StreamPerformanceEntry : public PerformanceEntry {
           first_byte_(stats.first_byte),
           first_byte_sent_(stats.first_byte_sent),
           sent_bytes_(stats.sent_bytes),
-          received_bytes_(stats.received_bytes) { }
+          received_bytes_(stats.received_bytes),
+          http2_state_(http2_state) { }
 
   int32_t id() const { return id_; }
   uint64_t first_header() const { return first_header_; }
@@ -1063,6 +1078,7 @@ class Http2StreamPerformanceEntry : public PerformanceEntry {
   uint64_t first_byte_sent() const { return first_byte_sent_; }
   uint64_t sent_bytes() const { return sent_bytes_; }
   uint64_t received_bytes() const { return received_bytes_; }
+  Http2State* http2_state() const { return http2_state_; }
 
   void Notify(Local<Value> obj) {
     PerformanceEntry::Notify(env(), kind(), obj);
@@ -1075,6 +1091,7 @@ class Http2StreamPerformanceEntry : public PerformanceEntry {
   uint64_t first_byte_sent_;
   uint64_t sent_bytes_;
   uint64_t received_bytes_;
+  Http2State* http2_state_;
 };
 
 class Http2Session::Http2Ping : public AsyncWrap {
@@ -1105,6 +1122,7 @@ class Http2Session::Http2Settings : public AsyncWrap {
  public:
   Http2Settings(Environment* env,
                 Http2Session* session,
+                Http2State* http2_state,
                 v8::Local<v8::Object> obj,
                 uint64_t start_time = uv_hrtime());
 
@@ -1122,15 +1140,14 @@ class Http2Session::Http2Settings : public AsyncWrap {
   Local<Value> Pack();
 
   // Resets the default values in the settings buffer
-  static void RefreshDefaults(Environment* env);
+  static void RefreshDefaults(Http2State* http2_state);
 
   // Update the local or remote settings for the given session
-  static void Update(Environment* env,
-                     Http2Session* session,
+  static void Update(Http2Session* session,
                      get_setting fn);
 
  private:
-  void Init();
+  void Init(Http2State* http2_state);
   Http2Session* session_;
   uint64_t startTime_;
   size_t count_ = 0;
