@@ -341,7 +341,7 @@ class BindingCallbackData : public BaseObject {
   inline BindingCallbackData(Environment* env,
                              v8::Local<v8::Object> obj,
                              T&& data)
-    : BaseObject(env, obj), data_(data) {}
+    : BaseObject(env, obj), data_(std::move(data)) {}
 
   inline T* get() { return &data_; }
 

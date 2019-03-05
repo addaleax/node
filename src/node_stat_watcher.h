@@ -31,6 +31,9 @@
 #include "v8.h"
 
 namespace node {
+namespace fs {
+struct BindingData;
+}
 
 class StatWatcher : public HandleWrap {
  public:
@@ -38,6 +41,7 @@ class StatWatcher : public HandleWrap {
 
  protected:
   StatWatcher(Environment* env,
+              fs::BindingData* binding_data,
               v8::Local<v8::Object> wrap,
               bool use_bigint);
 
@@ -56,6 +60,7 @@ class StatWatcher : public HandleWrap {
 
   uv_fs_poll_t watcher_;
   const bool use_bigint_;
+  fs::BindingData* binding_data_;
 };
 
 }  // namespace node

@@ -39,6 +39,9 @@ struct BindingData {
 
   std::vector<std::unique_ptr<fs::FileHandleReadWrap>>
       file_handle_read_wrap_freelist;
+
+  BindingData(BindingData&& other) = default;
+  BindingData& operator=(BindingData&& other) = default;
 };
 
 // structure used to store state during a complex operation, e.g., mkdirp.
