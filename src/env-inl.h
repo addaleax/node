@@ -607,26 +607,6 @@ inline double Environment::get_default_trigger_async_id() {
   return default_trigger_async_id;
 }
 
-inline double* Environment::heap_statistics_buffer() const {
-  CHECK_NOT_NULL(heap_statistics_buffer_);
-  return heap_statistics_buffer_;
-}
-
-inline void Environment::set_heap_statistics_buffer(double* pointer) {
-  CHECK_NULL(heap_statistics_buffer_);  // Should be set only once.
-  heap_statistics_buffer_ = pointer;
-}
-
-inline double* Environment::heap_space_statistics_buffer() const {
-  CHECK_NOT_NULL(heap_space_statistics_buffer_);
-  return heap_space_statistics_buffer_;
-}
-
-inline void Environment::set_heap_space_statistics_buffer(double* pointer) {
-  CHECK_NULL(heap_space_statistics_buffer_);  // Should be set only once.
-  heap_space_statistics_buffer_ = pointer;
-}
-
 inline char* Environment::http_parser_buffer() const {
   return http_parser_buffer_;
 }

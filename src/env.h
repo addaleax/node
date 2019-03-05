@@ -809,12 +809,6 @@ class Environment {
   std::unordered_map<std::string, const loader::PackageConfig>
       package_json_cache;
 
-  inline double* heap_statistics_buffer() const;
-  inline void set_heap_statistics_buffer(double* pointer);
-
-  inline double* heap_space_statistics_buffer() const;
-  inline void set_heap_space_statistics_buffer(double* pointer);
-
   inline char* http_parser_buffer() const;
   inline void set_http_parser_buffer(char* buffer);
   inline bool http_parser_buffer_in_use() const;
@@ -1126,9 +1120,6 @@ class Environment {
   std::list<HandleCleanup> handle_cleanup_queue_;
   int handle_cleanup_waiting_ = 0;
   int request_waiting_ = 0;
-
-  double* heap_statistics_buffer_ = nullptr;
-  double* heap_space_statistics_buffer_ = nullptr;
 
   char* http_parser_buffer_ = nullptr;
   bool http_parser_buffer_in_use_ = false;

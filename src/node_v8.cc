@@ -55,7 +55,7 @@ using v8::Value;
   V(8, does_zap_garbage, kDoesZapGarbageIndex)
 
 #define V(a, b, c) +1
-static const size_t kHeapStatisticsPropertiesCount =
+static constexpr size_t kHeapStatisticsPropertiesCount =
     HEAP_STATISTICS_PROPERTIES(V);
 #undef V
 
@@ -66,10 +66,14 @@ static const size_t kHeapStatisticsPropertiesCount =
   V(3, physical_space_size, kPhysicalSpaceSizeIndex)
 
 #define V(a, b, c) +1
-static const size_t kHeapSpaceStatisticsPropertiesCount =
+static constexpr size_t kHeapSpaceStatisticsPropertiesCount =
     HEAP_SPACE_STATISTICS_PROPERTIES(V);
 #undef V
 
+struct BindingData {
+  double* heap_statistics_buffer;
+  double* heap_space_statistics_buffer;
+};
 
 void CachedDataVersionTag(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
@@ -81,10 +85,10 @@ void CachedDataVersionTag(const FunctionCallbackInfo<Value>& args) {
 
 
 void UpdateHeapStatisticsArrayBuffer(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args);
+  BindingData* data = Environment::GetBindingData<BindingData>(args);
   HeapStatistics s;
-  env->isolate()->GetHeapStatistics(&s);
-  double* const buffer = env->heap_statistics_buffer();
+  args.GetIsolate()->GetHeapStatistics(&s);
+  double* const buffer = data->heap_statistics_buffer;
 #define V(index, name, _) buffer[index] = static_cast<double>(s.name());
   HEAP_STATISTICS_PROPERTIES(V)
 #undef V
@@ -92,18 +96,18 @@ void UpdateHeapStatisticsArrayBuffer(const FunctionCallbackInfo<Value>& args) {
 
 
 void UpdateHeapSpaceStatisticsBuffer(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args);
+  BindingData* data = Environment::GetBindingData<BindingData>(args);
   HeapSpaceStatistics s;
-  Isolate* const isolate = env->isolate();
-  double* buffer = env->heap_space_statistics_buffer();
-  size_t number_of_heap_spaces = env->isolate()->NumberOfHeapSpaces();
+  Isolate* const isolate = args.GetIsolate();
+  size_t number_of_heap_spaces = isolate->NumberOfHeapSpaces();
 
   for (size_t i = 0; i < number_of_heap_spaces; i++) {
     isolate->GetHeapSpaceStatistics(&s, i);
     size_t const property_offset = i * kHeapSpaceStatisticsPropertiesCount;
-#define V(index, name, _) buffer[property_offset + index] = \
-                              static_cast<double>(s.name());
-      HEAP_SPACE_STATISTICS_PROPERTIES(V)
+#define V(index, name, _)                                            \
+      data->heap_space_statistics_buffer[property_offset + index] =  \
+          static_cast<double>(s.name());
+    HEAP_SPACE_STATISTICS_PROPERTIES(V)
 #undef V
   }
 }
@@ -121,6 +125,9 @@ void Initialize(Local<Object> target,
                 Local<Context> context,
                 void* priv) {
   Environment* env = Environment::GetCurrent(context);
+  Environment::BindingScope<BindingData> binding_scope(env);
+  BindingData* binding_data = binding_scope.data;
+  if (binding_data == nullptr) return;
 
   env->SetMethodNoSideEffect(target, "cachedDataVersionTag",
                              CachedDataVersionTag);
@@ -129,17 +136,18 @@ void Initialize(Local<Object> target,
                  "updateHeapStatisticsArrayBuffer",
                  UpdateHeapStatisticsArrayBuffer);
 
-  env->set_heap_statistics_buffer(new double[kHeapStatisticsPropertiesCount]);
-
   const size_t heap_statistics_buffer_byte_length =
-      sizeof(*env->heap_statistics_buffer()) * kHeapStatisticsPropertiesCount;
+      sizeof(double) * kHeapStatisticsPropertiesCount;
 
+  Local<ArrayBuffer> heap_statistics_buffer =
+      ArrayBuffer::New(env->isolate(),
+                       heap_statistics_buffer_byte_length);
+  binding_data->heap_statistics_buffer =
+      static_cast<double*>(heap_statistics_buffer->GetContents().Data());
   target->Set(env->context(),
               FIXED_ONE_BYTE_STRING(env->isolate(),
                                     "heapStatisticsArrayBuffer"),
-              ArrayBuffer::New(env->isolate(),
-                               env->heap_statistics_buffer(),
-                               heap_statistics_buffer_byte_length)).FromJust();
+              heap_statistics_buffer).FromJust();
 
 #define V(i, _, name)                                                         \
   target->Set(env->context(),                                                 \
@@ -179,21 +187,21 @@ void Initialize(Local<Object> target,
                  "updateHeapSpaceStatisticsArrayBuffer",
                  UpdateHeapSpaceStatisticsBuffer);
 
-  env->set_heap_space_statistics_buffer(
-    new double[kHeapSpaceStatisticsPropertiesCount * number_of_heap_spaces]);
-
   const size_t heap_space_statistics_buffer_byte_length =
-      sizeof(*env->heap_space_statistics_buffer()) *
+      sizeof(double) *
       kHeapSpaceStatisticsPropertiesCount *
       number_of_heap_spaces;
+
+  Local<ArrayBuffer> heap_space_statistics_buffer =
+      ArrayBuffer::New(env->isolate(),
+                       heap_space_statistics_buffer_byte_length);
+  binding_data->heap_space_statistics_buffer =
+      static_cast<double*>(heap_space_statistics_buffer->GetContents().Data());
 
   target->Set(env->context(),
               FIXED_ONE_BYTE_STRING(env->isolate(),
                                     "heapSpaceStatisticsArrayBuffer"),
-              ArrayBuffer::New(env->isolate(),
-                               env->heap_space_statistics_buffer(),
-                               heap_space_statistics_buffer_byte_length))
-              .FromJust();
+              heap_space_statistics_buffer).FromJust();
 
 #define V(i, _, name)                                                         \
   target->Set(env->context(),                                                 \
