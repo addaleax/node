@@ -328,12 +328,87 @@ inline Environment* Environment::GetCurrent(
 inline Environment* Environment::GetFromCallbackData(v8::Local<v8::Value> val) {
   DCHECK(val->IsObject());
   v8::Local<v8::Object> obj = val.As<v8::Object>();
-  DCHECK_GE(obj->InternalFieldCount(), 1);
-  Environment* env =
-      static_cast<Environment*>(obj->GetAlignedPointerFromInternalField(0));
+  DCHECK_GE(obj->InternalFieldCount(), kCbDataFieldCount);
+  Environment* env = static_cast<Environment*>(
+      obj->GetAlignedPointerFromInternalField(kCbDataEnvField));
   DCHECK(env->as_callback_data_template()->HasInstance(obj));
   return env;
 }
+
+template <typename T>
+class BindingCallbackData : public BaseObject {
+ public:
+  inline BindingCallbackData(Environment* env,
+                             v8::Local<v8::Object> obj,
+                             T&& data)
+    : BaseObject(env, obj), data_(data) {}
+
+  inline T* get() { return &data_; }
+
+  SET_NO_MEMORY_INFO()
+  SET_MEMORY_INFO_NAME(BindingCallbackData)
+  SET_SELF_SIZE(BindingCallbackData)
+
+ private:
+  T data_;
+};
+
+template <typename T>
+Environment::BindingScope<T>::BindingScope(Environment* env, T&& orig)
+  : env(env) {
+  v8::Local<v8::Object> callback_data;
+  if (!env->MakeBindingCallbackData(std::move(orig)).ToLocal(&callback_data))
+    return;
+  data = GetBindingDataFromCallbackData<T>(callback_data);
+
+  // No nesting allowed currently.
+  CHECK_EQ(env->current_callback_data(), env->as_callback_data());
+  env->set_current_callback_data(callback_data);
+}
+
+template <typename T>
+Environment::BindingScope<T>::~BindingScope() {
+  env->set_current_callback_data(env->as_callback_data());
+}
+
+template <typename T>
+v8::MaybeLocal<v8::Object> Environment::MakeBindingCallbackData(T&& data) {
+  v8::Local<v8::Function> ctor;
+  v8::Local<v8::Object> obj;
+  if (!as_callback_data_template()->GetFunction(context()).ToLocal(&ctor) ||
+      !ctor->NewInstance(context()).ToLocal(&obj)) {
+    return v8::MaybeLocal<v8::Object>();
+  }
+  obj->SetAlignedPointerInInternalField(kCbDataEnvField, this);
+  new BindingCallbackData<T>(this, obj, std::move(data));
+  return obj;
+}
+
+template <typename T>
+inline T* Environment::GetBindingData(
+    const v8::FunctionCallbackInfo<v8::Value>& info) {
+  return GetBindingDataFromCallbackData<T>(info.Data());
+}
+
+template <typename T, typename U>
+inline T* Environment::GetBindingData(
+    const v8::PropertyCallbackInfo<U>& info) {
+  return GetBindingDataFromCallbackData<T>(info.Data());
+}
+
+template <typename T>
+inline T* Environment::GetBindingDataFromCallbackData(
+    v8::Local<v8::Value> val) {
+  DCHECK(val->IsObject());
+  v8::Local<v8::Object> obj = val.As<v8::Object>();
+  DCHECK_GE(obj->InternalFieldCount(), kCbDataFieldCount);
+  BindingCallbackData<T>* data = static_cast<BindingCallbackData<T>*>(
+      obj->GetAlignedPointerFromInternalField(kCbDataBindingField));
+  DCHECK_NOT_NULL(data);
+  DCHECK(data->env()->as_callback_data_template()->HasInstance(obj));
+  return data->get();
+}
+
 
 inline Environment* Environment::GetThreadLocalEnv() {
   return static_cast<Environment*>(uv_key_get(&thread_local_env));
@@ -864,7 +939,7 @@ inline v8::Local<v8::FunctionTemplate>
                                      v8::Local<v8::Signature> signature,
                                      v8::ConstructorBehavior behavior,
                                      v8::SideEffectType side_effect_type) {
-  v8::Local<v8::Object> external = as_callback_data();
+  v8::Local<v8::Object> external = current_callback_data();
   return v8::FunctionTemplate::New(isolate(), callback, external,
                                    signature, 0, behavior, side_effect_type);
 }

@@ -197,12 +197,14 @@ Environment::Environment(IsolateData* isolate_data,
   Context::Scope context_scope(context);
   {
     Local<FunctionTemplate> templ = FunctionTemplate::New(isolate());
-    templ->InstanceTemplate()->SetInternalFieldCount(1);
+    templ->InstanceTemplate()->SetInternalFieldCount(kCbDataFieldCount);
     Local<Object> obj =
         templ->GetFunction(context).ToLocalChecked()->NewInstance(
             context).ToLocalChecked();
-    obj->SetAlignedPointerInInternalField(0, this);
+    obj->SetAlignedPointerInInternalField(kCbDataBindingField, nullptr);
+    obj->SetAlignedPointerInInternalField(kCbDataEnvField, this);
     set_as_callback_data(obj);
+    set_current_callback_data(obj);
     set_as_callback_data_template(templ);
   }
 

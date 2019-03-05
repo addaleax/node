@@ -335,6 +335,7 @@ constexpr size_t kFsStatsBufferLength = kFsStatsFieldsNumber * 2;
   V(coverage_connection, v8::Object)                                           \
   V(context, v8::Context)                                                      \
   V(crypto_key_object_constructor, v8::Function)                               \
+  V(current_callback_data, v8::Object)                                         \
   V(domain_callback, v8::Function)                                             \
   V(domexception_function, v8::Function)                                       \
   V(fd_constructor_template, v8::ObjectTemplate)                               \
@@ -665,6 +666,29 @@ class Environment {
       const v8::PropertyCallbackInfo<T>& info);
 
   static inline Environment* GetFromCallbackData(v8::Local<v8::Value> val);
+
+  // Methods created using SetMethod(), SetPrototypeMethod(), etc. inside
+  // this scope can access the created T* object using
+  // Environment::GetBindingData(args) later.
+  template <typename T>
+  struct BindingScope {
+    explicit inline BindingScope(Environment* env, T&& data = T());
+    inline ~BindingScope();
+
+    T* data = nullptr;
+    Environment* env;
+  };
+
+  template <typename T>
+  inline v8::MaybeLocal<v8::Object> MakeBindingCallbackData(T&& data);
+  template <typename T>
+  static inline T* GetBindingData(
+      const v8::FunctionCallbackInfo<v8::Value>& args);
+  template <typename T, typename U>
+  static inline T* GetBindingData(const v8::PropertyCallbackInfo<U>& args);
+
+  template <typename T>
+  static inline T* GetBindingDataFromCallbackData(v8::Local<v8::Value> val);
 
   static uv_key_t thread_local_env;
   static inline Environment* GetThreadLocalEnv();
@@ -1190,6 +1214,11 @@ class Environment {
 #define V(PropertyName, TypeName) Persistent<TypeName> PropertyName ## _;
   ENVIRONMENT_STRONG_PERSISTENT_PROPERTIES(V)
 #undef V
+
+  // BaseObject uses the 0th field, this has to match that.
+  static constexpr int kCbDataBindingField = 0;
+  static constexpr int kCbDataEnvField = 1;
+  static constexpr int kCbDataFieldCount = 2;
 
   DISALLOW_COPY_AND_ASSIGN(Environment);
 };
