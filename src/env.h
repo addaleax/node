@@ -809,11 +809,6 @@ class Environment {
   std::unordered_map<std::string, const loader::PackageConfig>
       package_json_cache;
 
-  inline char* http_parser_buffer() const;
-  inline void set_http_parser_buffer(char* buffer);
-  inline bool http_parser_buffer_in_use() const;
-  inline void set_http_parser_buffer_in_use(bool in_use);
-
   inline bool debug_enabled(DebugCategory category) const;
   inline void set_debug_enabled(DebugCategory category, bool enabled);
   void set_debug_categories(const std::string& cats, bool enabled);
@@ -1120,9 +1115,6 @@ class Environment {
   std::list<HandleCleanup> handle_cleanup_queue_;
   int handle_cleanup_waiting_ = 0;
   int request_waiting_ = 0;
-
-  char* http_parser_buffer_ = nullptr;
-  bool http_parser_buffer_in_use_ = false;
 
   bool debug_enabled_[static_cast<int>(DebugCategory::CATEGORY_COUNT)] = {0};
 
