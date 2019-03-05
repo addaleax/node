@@ -5,6 +5,8 @@
 
 #include "aliased_buffer.h"
 
+struct nghttp2_rcbuf;
+
 namespace node {
 namespace http2 {
 
@@ -136,6 +138,8 @@ class Http2State {
   AliasedBuffer<uint32_t, v8::Uint32Array> padding_buffer;
   AliasedBuffer<uint32_t, v8::Uint32Array> options_buffer;
   AliasedBuffer<uint32_t, v8::Uint32Array> settings_buffer;
+
+  std::unordered_map<nghttp2_rcbuf*, v8::Eternal<v8::String>> http2_static_strs;
 
  private:
   struct http2_state_internal {

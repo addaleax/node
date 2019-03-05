@@ -44,8 +44,6 @@
 #include <unordered_set>
 #include <vector>
 
-struct nghttp2_rcbuf;
-
 namespace node {
 
 namespace contextify {
@@ -418,7 +416,6 @@ class IsolateData {
 #undef VS
 #undef VP
 
-  std::unordered_map<nghttp2_rcbuf*, v8::Eternal<v8::String>> http2_static_strs;
   inline v8::Isolate* isolate() const;
 
  private:
