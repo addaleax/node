@@ -418,7 +418,8 @@ constexpr size_t kFsStatsBufferLength =
   V(tcp_constructor_template, v8::FunctionTemplate)                            \
   V(tty_constructor_template, v8::FunctionTemplate)                            \
   V(write_wrap_template, v8::ObjectTemplate)                                   \
-  V(worker_heap_snapshot_taker_template, v8::ObjectTemplate)
+  V(worker_heap_snapshot_taker_template, v8::ObjectTemplate)                   \
+  V(worker_snapshot_taker_template, v8::ObjectTemplate)
 
 #define ENVIRONMENT_STRONG_PERSISTENT_VALUES(V)                                \
   V(as_callback_data, v8::External)                                            \

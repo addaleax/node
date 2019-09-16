@@ -35,8 +35,11 @@ using v8::Number;
 using v8::Object;
 using v8::ResourceConstraints;
 using v8::SealHandleScope;
+using v8::SnapshotCreator;
+using v8::StartupData;
 using v8::String;
 using v8::TryCatch;
+using v8::Uint8Array;
 using v8::Value;
 
 namespace node {
@@ -123,6 +126,10 @@ void Worker::UpdateResourceConstraints(ResourceConstraints* constraints) {
   }
 }
 
+
+static std::vector<intptr_t> external_references = {
+    reinterpret_cast<intptr_t>(nullptr)};
+
 // This class contains data that is only relevant to the child thread itself,
 // and only while it is running.
 // (Eventually, the Environment instance should probably also be moved here.)
@@ -158,7 +165,13 @@ class WorkerThreadData {
     }
 
     w->platform_->RegisterIsolate(isolate, &loop_);
-    Isolate::Initialize(isolate, params);
+    if (false) {
+      Isolate::Initialize(isolate, params);
+    } else {
+      w->snapshot_creator_ =
+          std::make_unique<SnapshotCreator>(isolate,
+                                            external_references.data());
+    }
     SetIsolateUpForNode(isolate);
 
     isolate->AddNearHeapLimitCallback(Worker::NearHeapLimit, w);
@@ -210,7 +223,13 @@ class WorkerThreadData {
       // the platform.
       // (Refs: https://github.com/nodejs/node/issues/30846)
       w_->platform_->UnregisterIsolate(isolate);
-      isolate->Dispose();
+
+      if (w_->snapshot_creator_) {
+        CHECK(w_->took_snapshot_);
+        w_->snapshot_creator_.reset();
+      } else {
+        isolate->Dispose();
+      }
 
       // Wait until the platform has cleaned up all relevant resources.
       while (!platform_finished) {
@@ -747,6 +766,123 @@ void Worker::TakeHeapSnapshot(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(scheduled ? taker->object() : Local<Object>());
 }
 
+class WorkerSnapshotTaker : public AsyncWrap {
+ public:
+  WorkerSnapshotTaker(Environment* env, Local<Object> obj)
+    : AsyncWrap(env, obj, AsyncWrap::PROVIDER_WORKERSNAPSHOT) {}
+
+  SET_NO_MEMORY_INFO()
+  SET_MEMORY_INFO_NAME(WorkerSnapshotTaker)
+  SET_SELF_SIZE(WorkerSnapshotTaker)
+};
+
+class OwnedStartupData {
+ public:
+  inline OwnedStartupData(StartupData data, SnapshotData&& snapshot_data);
+  inline ~OwnedStartupData();
+
+  inline OwnedStartupData& operator=(OwnedStartupData&& other);
+  inline OwnedStartupData(OwnedStartupData&& other);
+
+  inline const StartupData& startup_data() const { return data_; }
+  inline MaybeLocal<Uint8Array> ToBuffer(Environment* env);
+
+  OwnedStartupData& operator=(const OwnedStartupData& other) = delete;
+  OwnedStartupData(const OwnedStartupData& other) = delete;
+
+ private:
+  StartupData data_;
+  SnapshotData snapshot_data_;
+};
+
+OwnedStartupData::OwnedStartupData(
+    StartupData data, SnapshotData&& snapshot_data)
+  : data_(data), snapshot_data_(std::move(snapshot_data)) {}
+
+OwnedStartupData::~OwnedStartupData() {
+  delete[] data_.data;
+}
+
+OwnedStartupData& OwnedStartupData::operator=(OwnedStartupData&& other) {
+  if (this == &other) return *this;
+  this->~OwnedStartupData();
+  new(this) OwnedStartupData(std::move(other));
+  return *this;
+}
+
+OwnedStartupData::OwnedStartupData(OwnedStartupData&& other) {
+  data_ = other.data_;
+  other.data_ = { nullptr, 0 };
+  snapshot_data_ = std::move(other.snapshot_data_);
+}
+
+MaybeLocal<Uint8Array> OwnedStartupData::ToBuffer(Environment* env) {
+  // ... integrate SnapshotData somehow
+  std::shared_ptr<BackingStore> bs = ArrayBuffer::NewBackingStore(
+      const_cast<char*>(data_.data),  // ...
+      data_.raw_size,
+      [](void* data, size_t, void*) {
+        delete[] static_cast<const char*>(data);
+      }, nullptr);
+  data_ = { nullptr, 0 };
+  return Buffer::New(env,
+                     ArrayBuffer::New(env->isolate(), bs),
+                     0,
+                     bs->ByteLength());
+}
+
+void Worker::TakeSnapshot(const FunctionCallbackInfo<Value>& args) {
+  Worker* w;
+  ASSIGN_OR_RETURN_UNWRAP(&w, args.This());
+
+  Debug(w, "Worker %llu taking snapshot", w->thread_id_.id);
+
+  Environment* env = w->env();
+  AsyncHooks::DefaultTriggerAsyncIdScope trigger_id_scope(w);
+  Local<Object> wrap;
+  if (!env->worker_snapshot_taker_template()
+      ->NewInstance(env->context()).ToLocal(&wrap)) {
+    return;
+  }
+  BaseObjectPtr<WorkerSnapshotTaker> taker =
+      MakeDetachedBaseObject<WorkerSnapshotTaker>(env, wrap);
+
+  bool scheduled =
+      w->SetImmediateThreadsafe([taker, env, w](Environment* worker_env) {
+    CHECK(!w->took_snapshot_); // XXX
+    SnapshotCreator* creator = w->snapshot_creator_.get();
+    CHECK_NOT_NULL(creator); // XXX
+
+    {
+      Isolate* isolate = worker_env->isolate();
+      HandleScope handle_scope(isolate);
+      creator->SetDefaultContext(Context::New(isolate));
+    }
+
+    SnapshotData snapshot_data;
+    worker_env->Serialize(creator, &snapshot_data); // XXX
+    CHECK(snapshot_data.errors().empty()); // XXX
+    OwnedStartupData snapshot {
+      creator->CreateBlob(SnapshotCreator::FunctionCodeHandling::kClear),
+      std::move(snapshot_data) };
+    w->took_snapshot_ = true;
+    CHECK(snapshot.startup_data().CanBeRehashed());
+
+    env->SetImmediateThreadsafe(
+        [taker, snapshot = std::move(snapshot)](Environment* env) mutable {
+          HandleScope handle_scope(env->isolate());
+          Context::Scope context_scope(env->context());
+
+          AsyncHooks::DefaultTriggerAsyncIdScope trigger_id_scope(taker.get());
+          Local<Uint8Array> arr;
+          if (!snapshot.ToBuffer(env).ToLocal(&arr)) return;
+          Local<Value> args[] = { arr };
+          taker->MakeCallback(env->ondone_string(), arraysize(args), args);
+        });
+  });
+  args.GetReturnValue().Set(scheduled ? taker->object() : Local<Object>());
+}
+
 namespace {
 
 // Return the MessagePort that is global for this Environment and communicates
@@ -780,6 +916,7 @@ void InitWorker(Local<Object> target,
     env->SetProtoMethod(w, "unref", Worker::Unref);
     env->SetProtoMethod(w, "getResourceLimits", Worker::GetResourceLimits);
     env->SetProtoMethod(w, "takeHeapSnapshot", Worker::TakeHeapSnapshot);
+    env->SetProtoMethod(w, "takeSnapshot", Worker::TakeSnapshot);
 
     Local<String> workerString =
         FIXED_ONE_BYTE_STRING(env->isolate(), "Worker");
@@ -800,6 +937,19 @@ void InitWorker(Local<Object> target,
         FIXED_ONE_BYTE_STRING(env->isolate(), "WorkerHeapSnapshotTaker");
     wst->SetClassName(wst_string);
     env->set_worker_heap_snapshot_taker_template(wst->InstanceTemplate());
+  }
+
+  {
+    Local<FunctionTemplate> wst = FunctionTemplate::New(env->isolate());
+
+    wst->InstanceTemplate()->SetInternalFieldCount(
+        WorkerSnapshotTaker::kInternalFieldCount);
+    wst->Inherit(AsyncWrap::GetConstructorTemplate(env));
+
+    Local<String> wst_string =
+        FIXED_ONE_BYTE_STRING(env->isolate(), "WorkerSnapshotTaker");
+    wst->SetClassName(wst_string);
+    env->set_worker_snapshot_taker_template(wst->InstanceTemplate());
   }
 
   env->SetMethod(target, "getEnvMessagePort", GetEnvMessagePort);

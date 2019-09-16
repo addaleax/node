@@ -98,6 +98,7 @@ void SignalExit(int signal, siginfo_t* info, void* ucontext);
 std::string GetProcessTitle(const char* default_title);
 std::string GetHumanReadableProcessName();
 
+// XXX This should probably be public.
 void InitializeContextRuntime(v8::Local<v8::Context>);
 bool InitializePrimordials(v8::Local<v8::Context> context);
 

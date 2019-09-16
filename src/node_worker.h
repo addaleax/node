@@ -42,6 +42,8 @@ class Worker : public AsyncWrap {
 
   template <typename Fn>
   inline bool RequestInterrupt(Fn&& cb);
+  template <typename Fn>
+  inline bool SetImmediateThreadsafe(Fn&& cb);
 
   void MemoryInfo(MemoryTracker* tracker) const override;
   SET_MEMORY_INFO_NAME(Worker)
@@ -61,6 +63,7 @@ class Worker : public AsyncWrap {
       const v8::FunctionCallbackInfo<v8::Value>& args);
   v8::Local<v8::Float64Array> GetResourceLimits(v8::Isolate* isolate) const;
   static void TakeHeapSnapshot(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void TakeSnapshot(const v8::FunctionCallbackInfo<v8::Value>& args);
 
  private:
   void CreateEnvMessagePort(Environment* env);
@@ -73,6 +76,8 @@ class Worker : public AsyncWrap {
 
   MultiIsolatePlatform* platform_;
   v8::Isolate* isolate_ = nullptr;
+  std::unique_ptr<v8::SnapshotCreator> snapshot_creator_;
+  bool took_snapshot_ = false;
   uv_thread_t tid_;
 
   std::unique_ptr<InspectorParentHandle> inspector_parent_handle_;
@@ -125,6 +130,14 @@ bool Worker::RequestInterrupt(Fn&& cb) {
   Mutex::ScopedLock lock(mutex_);
   if (env_ == nullptr) return false;
   env_->RequestInterrupt(std::move(cb));
+  return true;
+}
+
+template <typename Fn>
+bool Worker::SetImmediateThreadsafe(Fn&& cb) {
+  Mutex::ScopedLock lock(mutex_);
+  if (env_ == nullptr) return false;
+  env_->SetImmediateThreadsafe(std::move(cb));
   return true;
 }
 

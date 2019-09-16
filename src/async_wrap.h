@@ -71,6 +71,7 @@ namespace node {
   V(SIGINTWATCHDOG)                                                           \
   V(WORKER)                                                                   \
   V(WORKERHEAPSNAPSHOT)                                                       \
+  V(WORKERSNAPSHOT)                                                           \
   V(WRITEWRAP)                                                                \
   V(ZLIB)
 
