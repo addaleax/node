@@ -531,6 +531,9 @@ void SecureContext::Initialize(Environment* env, Local<Object> target) {
   env->set_secure_context_constructor_template(t);
 }
 
+SecureContext::~SecureContext() {
+  Reset();
+}
 
 void SecureContext::New(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
@@ -4716,6 +4719,10 @@ void Hash::Initialize(Environment* env, Local<Object> target) {
               t->GetFunction(env->context()).ToLocalChecked()).Check();
 }
 
+Hash::~Hash() {
+  if (md_value_ != nullptr)
+    OPENSSL_clear_free(md_value_, md_len_);
+}
 
 void Hash::New(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
@@ -5956,6 +5963,7 @@ void ECDH::Initialize(Environment* env, Local<Object> target) {
               t->GetFunction(env->context()).ToLocalChecked()).Check();
 }
 
+ECDH::~ECDH() {}
 
 void ECDH::New(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);

@@ -80,11 +80,9 @@ extern void UseExtraCaCerts(const std::string& file);
 
 void InitCryptoOnce();
 
-class SecureContext : public BaseObject {
+class SecureContext final : public BaseObject {
  public:
-  ~SecureContext() override {
-    Reset();
-  }
+  ~SecureContext() override;
 
   static void Initialize(Environment* env, v8::Local<v8::Object> target);
 
@@ -588,8 +586,10 @@ class Hmac : public BaseObject {
   DeleteFnPtr<HMAC_CTX, HMAC_CTX_free> ctx_;
 };
 
-class Hash : public BaseObject {
+class Hash final : public BaseObject {
  public:
+  ~Hash() override;
+
   static void Initialize(Environment* env, v8::Local<v8::Object> target);
 
   // TODO(joyeecheung): track the memory used by OpenSSL types
@@ -611,11 +611,6 @@ class Hash : public BaseObject {
         has_md_(false),
         md_value_(nullptr) {
     MakeWeak();
-  }
-
-  ~Hash() override {
-    if (md_value_ != nullptr)
-      OPENSSL_clear_free(md_value_, md_len_);
   }
 
  private:
@@ -790,11 +785,9 @@ class DiffieHellman : public BaseObject {
   DHPointer dh_;
 };
 
-class ECDH : public BaseObject {
+class ECDH final : public BaseObject {
  public:
-  ~ECDH() override {
-    group_ = nullptr;
-  }
+  ~ECDH() override;
 
   static void Initialize(Environment* env, v8::Local<v8::Object> target);
   static ECPointPointer BufferToPoint(Environment* env,
