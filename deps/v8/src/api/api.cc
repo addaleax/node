@@ -595,7 +595,7 @@ SnapshotCreator::SnapshotCreator(const intptr_t* external_references,
 
 SnapshotCreator::~SnapshotCreator() {
   SnapshotCreatorData* data = SnapshotCreatorData::cast(data_);
-  DCHECK(data->created_);
+  CHECK(data->created_);
   Isolate* isolate = data->isolate_;
   isolate->Exit();
   isolate->Dispose();
@@ -706,8 +706,8 @@ StartupData SnapshotCreator::CreateBlob(
     SnapshotCreator::FunctionCodeHandling function_code_handling) {
   SnapshotCreatorData* data = SnapshotCreatorData::cast(data_);
   i::Isolate* isolate = reinterpret_cast<i::Isolate*>(data->isolate_);
-  DCHECK(!data->created_);
-  DCHECK(!data->default_context_.IsEmpty());
+  CHECK(!data->created_);
+  CHECK(!data->default_context_.IsEmpty());
 
   int num_additional_contexts = static_cast<int>(data->contexts_.Size());
 
