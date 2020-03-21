@@ -4,6 +4,7 @@
 #include "node_perf.h"
 #include "node_buffer.h"
 #include "node_process.h"
+#include "snapshot_support-inl.h"
 #include "util-inl.h"
 
 #include <cinttypes>
@@ -31,6 +32,7 @@ using v8::Number;
 using v8::Object;
 using v8::PropertyAttribute;
 using v8::ReadOnly;
+using v8::SnapshotCreator;
 using v8::String;
 using v8::Uint32Array;
 using v8::Value;
@@ -51,6 +53,15 @@ void PerformanceState::Mark(enum PerformanceMilestone milestone,
       TRACING_CATEGORY_NODE1(bootstrap),
       GetPerformanceMilestoneName(milestone),
       TRACE_EVENT_SCOPE_THREAD, ts / 1000);
+}
+
+void PerformanceState::Serialize(SnapshotCreator* creator,
+                                 SnapshotData* snapshot_data) const {
+  snapshot_data->StartWriteEntry("PerformanceState");
+  root.Serialize(creator, snapshot_data);
+  milestones.Serialize(creator, snapshot_data);
+  observers.Serialize(creator, snapshot_data);
+  snapshot_data->EndWriteEntry();
 }
 
 // Initialize the performance entry object properties

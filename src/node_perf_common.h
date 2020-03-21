@@ -52,7 +52,7 @@ enum PerformanceEntryType {
   NODE_PERFORMANCE_ENTRY_TYPE_INVALID
 };
 
-class PerformanceState {
+class PerformanceState final : public Snapshottable {
  public:
   explicit PerformanceState(v8::Isolate* isolate) :
     root(
@@ -80,6 +80,9 @@ class PerformanceState {
 
   void Mark(enum PerformanceMilestone milestone,
             uint64_t ts = PERFORMANCE_NOW());
+
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
 
  private:
   struct performance_state_internal {

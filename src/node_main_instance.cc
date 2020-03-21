@@ -59,7 +59,7 @@ NodeMainInstance::NodeMainInstance(
     MultiIsolatePlatform* platform,
     const std::vector<std::string>& args,
     const std::vector<std::string>& exec_args,
-    const std::vector<size_t>* per_isolate_data_indexes)
+    SnapshotData* snapshot_data)
     : args_(args),
       exec_args_(exec_args),
       array_buffer_allocator_(ArrayBufferAllocator::Create()),
@@ -76,14 +76,14 @@ NodeMainInstance::NodeMainInstance(
   SetIsolateCreateParamsForNode(params);
   Isolate::Initialize(isolate_, *params);
 
-  deserialize_mode_ = per_isolate_data_indexes != nullptr;
+  deserialize_mode_ = snapshot_data != nullptr;
   // If the indexes are not nullptr, we are not deserializing
   CHECK_IMPLIES(deserialize_mode_, params->external_references != nullptr);
   isolate_data_ = std::make_unique<IsolateData>(isolate_,
                                                 event_loop,
                                                 platform,
                                                 array_buffer_allocator_.get(),
-                                                per_isolate_data_indexes);
+                                                snapshot_data);
   IsolateSettings s;
   SetIsolateMiscHandlers(isolate_, s);
   if (!deserialize_mode_) {

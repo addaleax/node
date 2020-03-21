@@ -13,6 +13,8 @@
 
 namespace node {
 
+class SnapshotData;
+
 // TODO(joyeecheung): align this with the Worker/WorkerThreadData class.
 // We may be able to create an abstract class to reuse some of the routines.
 class NodeMainInstance {
@@ -51,7 +53,7 @@ class NodeMainInstance {
       MultiIsolatePlatform* platform,
       const std::vector<std::string>& args,
       const std::vector<std::string>& exec_args,
-      const std::vector<size_t>* per_isolate_data_indexes = nullptr);
+      SnapshotData* snapshot_data = nullptr);
   ~NodeMainInstance();
 
   // Start running the Node.js instances, return the exit code when finished.
@@ -64,7 +66,7 @@ class NodeMainInstance {
 
   // If nullptr is returned, the binary is not built with embedded
   // snapshot.
-  static const std::vector<size_t>* GetIsolateDataIndexes();
+  static SnapshotData* GetSnapshotData();
   static v8::StartupData* GetEmbeddedSnapshotBlob();
 
   static const size_t kNodeContextIndex = 0;

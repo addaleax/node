@@ -128,6 +128,10 @@ inline Environment* AsyncHooks::env() {
   return Environment::ForAsyncHooks(this);
 }
 
+inline const Environment* AsyncHooks::env() const {
+  return Environment::ForAsyncHooks(const_cast<AsyncHooks*>(this));
+}
+
 // Remember to keep this code aligned with pushAsyncContext() in JS.
 inline void AsyncHooks::push_async_context(double async_id,
                                            double trigger_async_id,
@@ -467,15 +471,27 @@ inline void Environment::set_is_in_inspector_console_call(bool value) {
 }
 #endif
 
+inline const AsyncHooks* Environment::async_hooks() const {
+  return &async_hooks_;
+}
+
 inline AsyncHooks* Environment::async_hooks() {
   return &async_hooks_;
+}
+
+inline const ImmediateInfo* Environment::immediate_info() const {
+  return &immediate_info_;
 }
 
 inline ImmediateInfo* Environment::immediate_info() {
   return &immediate_info_;
 }
 
-inline TickInfo* Environment::tick_info() {
+inline const TickInfo* Environment::tick_info() const {
+  return &tick_info_;
+}
+
+inline TickInfo* Environment::tick_info()  {
   return &tick_info_;
 }
 
@@ -926,6 +942,10 @@ inline performance::PerformanceState* Environment::performance_state() {
   return performance_state_.get();
 }
 
+const performance::PerformanceState* Environment::performance_state() const {
+  return performance_state_.get();
+}
+
 inline std::unordered_map<std::string, uint64_t>*
     Environment::performance_marks() {
   return &performance_marks_;
@@ -1211,7 +1231,7 @@ BaseObject* CleanupHookCallback::GetBaseObject() const {
 }
 
 template <typename T>
-void Environment::ForEachBaseObject(T&& iterator) {
+void Environment::ForEachBaseObject(T&& iterator) const {
   for (const auto& hook : cleanup_hooks_) {
     BaseObject* obj = hook.GetBaseObject();
     if (obj != nullptr)

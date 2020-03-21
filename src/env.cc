@@ -13,6 +13,7 @@
 #include "node_v8_platform-inl.h"
 #include "node_worker.h"
 #include "req_wrap-inl.h"
+#include "snapshot_support-inl.h"
 #include "stream_base.h"
 #include "tracing/agent.h"
 #include "tracing/traced_value.h"
@@ -57,20 +58,21 @@ int const Environment::kNodeContextTag = 0x6e6f64;
 void* const Environment::kNodeContextTagPtr = const_cast<void*>(
     static_cast<const void*>(&Environment::kNodeContextTag));
 
-std::vector<size_t> IsolateData::Serialize(SnapshotCreator* creator) {
+void IsolateData::Serialize(SnapshotCreator* creator,
+                            SnapshotData* snapshot_data) const {
   Isolate* isolate = creator->GetIsolate();
-  std::vector<size_t> indexes;
   HandleScope handle_scope(isolate);
   // XXX(joyeecheung): technically speaking, the indexes here should be
   // consecutive and we could just return a range instead of an array,
   // but that's not part of the V8 API contract so we use an array
   // just to be safe.
 
+  snapshot_data->StartWriteEntry("IsolateData");
 #define VP(PropertyName, StringValue) V(Private, PropertyName)
 #define VY(PropertyName, StringValue) V(Symbol, PropertyName)
 #define VS(PropertyName, StringValue) V(String, PropertyName)
 #define V(TypeName, PropertyName)                                              \
-  indexes.push_back(creator->AddData(PropertyName##_.Get(isolate)));
+  snapshot_data->WriteIndex(creator->AddData(PropertyName()));
   PER_ISOLATE_PRIVATE_SYMBOL_PROPERTIES(VP)
   PER_ISOLATE_SYMBOL_PROPERTIES(VY)
   PER_ISOLATE_STRING_PROPERTIES(VS)
@@ -79,24 +81,28 @@ std::vector<size_t> IsolateData::Serialize(SnapshotCreator* creator) {
 #undef VS
 #undef VP
   for (size_t i = 0; i < AsyncWrap::PROVIDERS_LENGTH; i++)
-    indexes.push_back(creator->AddData(async_wrap_provider(i)));
+    snapshot_data->WriteIndex(creator->AddData(async_wrap_provider(i)));
 
-  return indexes;
+  snapshot_data->EndWriteEntry();
 }
 
-void IsolateData::DeserializeProperties(const std::vector<size_t>* indexes) {
-  size_t i = 0;
+void IsolateData::DeserializeProperties(SnapshotData* snapshot_data) {
+  if (snapshot_data->StartReadEntry("IsolateData").IsNothing()) return;
+
   HandleScope handle_scope(isolate_);
 
+  size_t index;
 #define VP(PropertyName, StringValue) V(Private, PropertyName)
 #define VY(PropertyName, StringValue) V(Symbol, PropertyName)
 #define VS(PropertyName, StringValue) V(String, PropertyName)
 #define V(TypeName, PropertyName)                                              \
   do {                                                                         \
+    if (!snapshot_data->ReadIndex().To(&index)) return;                        \
     MaybeLocal<TypeName> field =                                               \
-        isolate_->GetDataFromSnapshotOnce<TypeName>((*indexes)[i++]);          \
+        isolate_->GetDataFromSnapshotOnce<TypeName>(index);                    \
     if (field.IsEmpty()) {                                                     \
-      fprintf(stderr, "Failed to deserialize " #PropertyName "\n");            \
+      snapshot_data->add_error("Failed to deserialize " #PropertyName);        \
+      return;                                                                  \
     }                                                                          \
     PropertyName##_.Set(isolate_, field.ToLocalChecked());                     \
   } while (0);
@@ -109,13 +115,17 @@ void IsolateData::DeserializeProperties(const std::vector<size_t>* indexes) {
 #undef VP
 
   for (size_t j = 0; j < AsyncWrap::PROVIDERS_LENGTH; j++) {
-    MaybeLocal<String> field =
-        isolate_->GetDataFromSnapshotOnce<String>((*indexes)[i++]);
+    if (!snapshot_data->ReadIndex().To(&index)) return;
+    MaybeLocal<String> field = isolate_->GetDataFromSnapshotOnce<String>(index);
     if (field.IsEmpty()) {
-      fprintf(stderr, "Failed to deserialize AsyncWrap provider %zu\n", j);
+      snapshot_data->add_error(SPrintF(
+          "Failed to deserialize AsyncWrap provider %zu\n", j));
+      return;
     }
     async_wrap_providers_[j].Set(isolate_, field.ToLocalChecked());
   }
+
+  if (snapshot_data->EndReadEntry().IsNothing()) return;
 }
 
 void IsolateData::CreateProperties() {
@@ -186,7 +196,7 @@ IsolateData::IsolateData(Isolate* isolate,
                          uv_loop_t* event_loop,
                          MultiIsolatePlatform* platform,
                          ArrayBufferAllocator* node_allocator,
-                         const std::vector<size_t>* indexes)
+                         SnapshotData* snapshot_data)
     : isolate_(isolate),
       event_loop_(event_loop),
       allocator_(isolate->GetArrayBufferAllocator()),
@@ -199,10 +209,10 @@ IsolateData::IsolateData(Isolate* isolate,
   options_.reset(
       new PerIsolateOptions(*(per_process::cli_options->per_isolate)));
 
-  if (indexes == nullptr) {
+  if (snapshot_data == nullptr) {
     CreateProperties();
   } else {
-    DeserializeProperties(indexes);
+    DeserializeProperties(snapshot_data);
   }
 }
 
@@ -281,10 +291,20 @@ class NoBindingData : public BindingDataBase {
   NoBindingData(Environment* env, Local<Object> obj)
     : BindingDataBase(env, obj) {}
 
+  void Serialize(SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
+
   SET_NO_MEMORY_INFO()
   SET_MEMORY_INFO_NAME(NoBindingData)
   SET_SELF_SIZE(NoBindingData)
 };
+
+void NoBindingData::Serialize(SnapshotCreator* creator,
+                              SnapshotData* snapshot_data) const {
+  snapshot_data->StartWriteEntry("NoBindingData");
+  snapshot_data->WriteIndex(creator->AddData(env()->context(), object()));
+  snapshot_data->EndWriteEntry();
+}
 
 void Environment::CreateProperties() {
   HandleScope handle_scope(isolate_);
@@ -314,6 +334,63 @@ void Environment::CreateProperties() {
   Local<Object> process_object =
       node::CreateProcessObject(this).FromMaybe(Local<Object>());
   set_process_object(process_object);
+}
+
+void Environment::Serialize(SnapshotCreator* creator,
+                            SnapshotData* snapshot_data) const {
+  snapshot_data->StartWriteEntry("Environment");
+  isolate_data()->Serialize(creator, snapshot_data);
+  async_hooks()->Serialize(creator, snapshot_data);
+  immediate_info()->Serialize(creator, snapshot_data);
+  tick_info()->Serialize(creator, snapshot_data);
+  performance_state()->Serialize(creator, snapshot_data);
+
+  snapshot_data->WriteBool(has_run_bootstrapping_code());
+  snapshot_data->WriteBool(can_call_into_js());
+
+  snapshot_data->WriteUint32(module_id_counter_);
+  snapshot_data->WriteUint32(script_id_counter_);
+  snapshot_data->WriteUint32(function_id_counter_);
+
+  snapshot_data->WriteUint64(exec_argv_.size());
+  for (const std::string& arg : exec_argv_)
+    snapshot_data->WriteString(arg);
+
+  snapshot_data->WriteUint64(argv_.size());
+  for (const std::string& arg : argv_)
+    snapshot_data->WriteString(arg);
+
+  should_abort_on_uncaught_toggle_.Serialize(creator, snapshot_data);
+  stream_base_state_.Serialize(creator, snapshot_data);
+
+  Isolate* isolate = creator->GetIsolate();
+  HandleScope handle_scope(isolate);
+  Local<Context> context = this->context();
+
+#define V(PropertyName, TypeName)                                             \
+  {                                                                           \
+    Local<TypeName> value = PropertyName();                                   \
+    size_t index = value.IsEmpty() ?                                          \
+        SnapshotData::kEmptyIndex : creator->AddData(context, value);         \
+    snapshot_data->WriteIndex(index);                                  \
+  }
+  ENVIRONMENT_STRONG_PERSISTENT_TEMPLATES(V)
+  ENVIRONMENT_STRONG_PERSISTENT_VALUES(V)
+#undef V
+  snapshot_data->WriteIndex(creator->AddData(context, context));
+
+  size_t expected_base_object_count =
+      initial_base_object_count_ + base_object_count();
+  snapshot_data->WriteUint64(expected_base_object_count);
+
+  size_t observed_base_object_count = 0;
+  ForEachBaseObject([&](const BaseObject* obj) {
+    observed_base_object_count++;
+    obj->Serialize(creator, snapshot_data);
+  });
+  CHECK_EQ(observed_base_object_count, expected_base_object_count);
+
+  snapshot_data->EndWriteEntry();
 }
 
 std::string GetExecPath(const std::vector<std::string>& argv) {
@@ -998,14 +1075,42 @@ void ImmediateInfo::MemoryInfo(MemoryTracker* tracker) const {
   tracker->TrackField("fields", fields_);
 }
 
+void ImmediateInfo::Serialize(SnapshotCreator* creator,
+                              SnapshotData* snapshot_data) const {
+  snapshot_data->StartWriteEntry("ImmediateInfo");
+  fields_.Serialize(creator, snapshot_data);
+  snapshot_data->EndWriteEntry();
+}
+
 void TickInfo::MemoryInfo(MemoryTracker* tracker) const {
   tracker->TrackField("fields", fields_);
+}
+
+void TickInfo::Serialize(SnapshotCreator* creator,
+                         SnapshotData* snapshot_data) const {
+  snapshot_data->StartWriteEntry("TickInfo");
+  fields_.Serialize(creator, snapshot_data);
+  snapshot_data->EndWriteEntry();
 }
 
 void AsyncHooks::MemoryInfo(MemoryTracker* tracker) const {
   tracker->TrackField("async_ids_stack", async_ids_stack_);
   tracker->TrackField("fields", fields_);
   tracker->TrackField("async_id_fields", async_id_fields_);
+}
+
+void AsyncHooks::Serialize(SnapshotCreator* creator,
+                           SnapshotData* snapshot_data) const {
+  snapshot_data->StartWriteEntry("AsyncHooks");
+  async_ids_stack_.Serialize(creator, snapshot_data);
+  fields_.Serialize(creator, snapshot_data);
+  async_id_fields_.Serialize(creator, snapshot_data);
+
+  snapshot_data->WriteIndex(
+      creator->AddData(env()->context(),
+                       execution_async_resources_.Get(env()->isolate())));
+
+  snapshot_data->EndWriteEntry();
 }
 
 void AsyncHooks::grow_async_ids_stack() {

@@ -470,18 +470,20 @@ constexpr size_t kFsStatsBufferLength =
   V(url_constructor_function, v8::Function)
 
 class Environment;
+class SnapshotData;
 
-class IsolateData : public MemoryRetainer {
+class IsolateData : public MemoryRetainer, public Snapshottable {
  public:
   IsolateData(v8::Isolate* isolate,
               uv_loop_t* event_loop,
               MultiIsolatePlatform* platform = nullptr,
               ArrayBufferAllocator* node_allocator = nullptr,
-              const std::vector<size_t>* indexes = nullptr);
+              SnapshotData* snapshot_data = nullptr);
   SET_MEMORY_INFO_NAME(IsolateData)
   SET_SELF_SIZE(IsolateData)
   void MemoryInfo(MemoryTracker* tracker) const override;
-  std::vector<size_t> Serialize(v8::SnapshotCreator* creator);
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
 
   inline uv_loop_t* event_loop() const;
   inline MultiIsolatePlatform* platform() const;
@@ -518,7 +520,7 @@ class IsolateData : public MemoryRetainer {
   IsolateData& operator=(IsolateData&&) = delete;
 
  private:
-  void DeserializeProperties(const std::vector<size_t>* indexes);
+  void DeserializeProperties(SnapshotData* snapshot_data);
   void CreateProperties();
 
 #define VP(PropertyName, StringValue) V(v8::Private, PropertyName)
@@ -620,7 +622,7 @@ namespace per_process {
 extern std::shared_ptr<KVStore> system_environment;
 }
 
-class AsyncHooks : public MemoryRetainer {
+class AsyncHooks : public MemoryRetainer, public Snapshottable {
  public:
   SET_MEMORY_INFO_NAME(AsyncHooks)
   SET_SELF_SIZE(AsyncHooks)
@@ -657,6 +659,7 @@ class AsyncHooks : public MemoryRetainer {
 
   inline void no_force_checks();
   inline Environment* env();
+  inline const Environment* env() const;
 
   inline void push_async_context(double async_id, double trigger_async_id,
       v8::Local<v8::Value> execution_async_resource_);
@@ -691,6 +694,9 @@ class AsyncHooks : public MemoryRetainer {
     double old_default_trigger_async_id_;
   };
 
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
+
  private:
   friend class Environment;  // So we can call the constructor.
   inline AsyncHooks();
@@ -707,7 +713,7 @@ class AsyncHooks : public MemoryRetainer {
   v8::Global<v8::Array> execution_async_resources_;
 };
 
-class ImmediateInfo : public MemoryRetainer {
+class ImmediateInfo : public MemoryRetainer, public Snapshottable {
  public:
   inline AliasedUint32Array& fields();
   inline uint32_t count() const;
@@ -726,6 +732,9 @@ class ImmediateInfo : public MemoryRetainer {
   SET_SELF_SIZE(ImmediateInfo)
   void MemoryInfo(MemoryTracker* tracker) const override;
 
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
+
  private:
   friend class Environment;  // So we can call the constructor.
   inline explicit ImmediateInfo(v8::Isolate* isolate);
@@ -735,7 +744,7 @@ class ImmediateInfo : public MemoryRetainer {
   AliasedUint32Array fields_;
 };
 
-class TickInfo : public MemoryRetainer {
+class TickInfo : public MemoryRetainer, public Snapshottable {
  public:
   inline AliasedUint8Array& fields();
   inline bool has_tick_scheduled() const;
@@ -750,6 +759,9 @@ class TickInfo : public MemoryRetainer {
   TickInfo(TickInfo&&) = delete;
   TickInfo& operator=(TickInfo&&) = delete;
   ~TickInfo() = default;
+
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
 
  private:
   friend class Environment;  // So we can call the constructor.
@@ -835,7 +847,7 @@ class BindingDataBase : public BaseObject {
   v8::Global<v8::External> external_;
 };
 
-class Environment : public MemoryRetainer {
+class Environment : public MemoryRetainer, public Snapshottable {
  public:
   Environment(const Environment&) = delete;
   Environment& operator=(const Environment&) = delete;
@@ -849,6 +861,9 @@ class Environment : public MemoryRetainer {
   void MemoryInfo(MemoryTracker* tracker) const override;
 
   void CreateProperties();
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override;
+
   // Should be called before InitializeInspector()
   void InitializeDiagnostics();
 #if HAVE_INSPECTOR
@@ -959,8 +974,11 @@ class Environment : public MemoryRetainer {
   inline void IncreaseWaitingRequestCounter();
   inline void DecreaseWaitingRequestCounter();
 
+  inline const AsyncHooks* async_hooks() const;
   inline AsyncHooks* async_hooks();
+  inline const ImmediateInfo* immediate_info() const;
   inline ImmediateInfo* immediate_info();
+  inline const TickInfo* tick_info() const;
   inline TickInfo* tick_info();
   inline uint64_t timer_base() const;
   inline std::shared_ptr<KVStore> env_vars();
@@ -1019,6 +1037,7 @@ class Environment : public MemoryRetainer {
   EnabledDebugList* enabled_debug_list() { return &enabled_debug_list_; }
 
   inline performance::PerformanceState* performance_state();
+  inline const performance::PerformanceState* performance_state() const;
   inline std::unordered_map<std::string, uint64_t>* performance_marks();
 
   void CollectUVExceptionInfo(v8::Local<v8::Value> context,
@@ -1455,7 +1474,7 @@ class Environment : public MemoryRetainer {
       DefaultProcessExitHandler };
 
   template <typename T>
-  void ForEachBaseObject(T&& iterator);
+  void ForEachBaseObject(T&& iterator) const;
 
 #define V(PropertyName, TypeName) v8::Global<TypeName> PropertyName ## _;
   ENVIRONMENT_STRONG_PERSISTENT_VALUES(V)

@@ -7,6 +7,19 @@
 
 namespace node {
 
+const std::vector<std::string>& SnapshotData::errors() const {
+  return errors_;
+}
+
+std::vector<uint8_t> SnapshotData::release_storage() {
+  storage_.resize(current_index_);
+  return std::move(storage_);
+}
+
+SnapshotData::SnapshotData(std::vector<uint8_t>&& storage)
+  : storage_(storage) {}
+
+
 template <typename... Args>
 ExternalReferences::ExternalReferences(const char* id, Args*... args) {
   Register(id, this);

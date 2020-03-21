@@ -4,6 +4,7 @@
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
 #include <cinttypes>
+#include "snapshot_support.h"
 #include "util-inl.h"
 #include "v8.h"
 
@@ -30,7 +31,7 @@ template <class NativeT,
           class V8T,
           // SFINAE NativeT to be scalar
           typename = std::enable_if_t<std::is_scalar<NativeT>::value>>
-class AliasedBufferBase {
+class AliasedBufferBase final : public Snapshottable {
  public:
   AliasedBufferBase(v8::Isolate* isolate, const size_t count)
       : isolate_(isolate), count_(count), byte_offset_(0) {
@@ -241,6 +242,15 @@ class AliasedBufferBase {
 
     buffer_ = new_buffer;
     count_ = new_capacity;
+  }
+
+  void Serialize(v8::SnapshotCreator* creator,
+                 SnapshotData* snapshot_data) const override {
+    v8::HandleScope handle_scope(isolate_);
+    snapshot_data->WriteUint64(count_);
+    snapshot_data->WriteUint64(byte_offset_);
+    v8::Local<V8T> arr = GetJSArray();
+    snapshot_data->WriteIndex(creator->AddData(arr->CreationContext(), arr));
   }
 
  private:

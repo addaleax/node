@@ -1029,9 +1029,9 @@ int Start(int argc, char** argv) {
 
   {
     Isolate::CreateParams params;
-    const std::vector<size_t>* indexes = nullptr;
     std::vector<intptr_t> external_references = ExternalReferences::get_list();
     external_references.push_back(ExternalReferences::kEnd);
+    SnapshotData* snapshot_data = nullptr;
 
     bool force_no_snapshot =
         per_process::cli_options->per_isolate->no_node_snapshot;
@@ -1040,7 +1040,7 @@ int Start(int argc, char** argv) {
       if (blob != nullptr) {
         params.external_references = external_references.data();
         params.snapshot_blob = blob;
-        indexes = NodeMainInstance::GetIsolateDataIndexes();
+        snapshot_data = NodeMainInstance::GetSnapshotData();
       }
     }
 
@@ -1049,7 +1049,7 @@ int Start(int argc, char** argv) {
                                    per_process::v8_platform.Platform(),
                                    result.args,
                                    result.exec_args,
-                                   indexes);
+                                   snapshot_data);
     result.exit_code = main_instance.Run();
   }
 
