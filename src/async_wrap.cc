@@ -24,6 +24,7 @@
 #include "env-inl.h"
 #include "node_errors.h"
 #include "tracing/traced_value.h"
+#include "snapshot_support-inl.h"
 #include "util-inl.h"
 
 #include "v8.h"
@@ -578,6 +579,21 @@ void AsyncWrap::Initialize(Local<Object> target,
   }
 }
 
+static ExternalReferences external_references {
+  __FILE__,
+  SetupHooks,
+  AsyncWrap::PushAsyncContext,
+  AsyncWrap::PopAsyncContext,
+  AsyncWrap::QueueDestroyAsyncId,
+  EnablePromiseHook,
+  DisablePromiseHook,
+  RegisterDestroyHook,
+  AsyncWrapObject::New,
+  AsyncWrap::GetAsyncId,
+  AsyncWrap::AsyncReset,
+  AsyncWrap::GetProviderType,
+  PromiseWrap::getIsChainedPromise,
+};
 
 AsyncWrap::AsyncWrap(Environment* env,
                      Local<Object> object,
