@@ -142,7 +142,8 @@ FileHandle* FileHandle::New(BindingData* binding_data,
 }
 
 void FileHandle::New(const FunctionCallbackInfo<Value>& args) {
-  BindingData* binding_data = Unwrap<BindingData>(args.Data());
+  BindingData* binding_data =
+      Environment::GetBindingData<BindingData>(args.Data());
   Environment* env = binding_data->env();
   CHECK(args.IsConstructCall());
   CHECK(args[0]->IsInt32());
@@ -527,7 +528,8 @@ void FSReqCallback::SetReturnValue(const FunctionCallbackInfo<Value>& args) {
 
 void NewFSReqCallback(const FunctionCallbackInfo<Value>& args) {
   CHECK(args.IsConstructCall());
-  BindingData* binding_data = Unwrap<BindingData>(args.Data());
+  BindingData* binding_data =
+      Environment::GetBindingData<BindingData>(args.Data());
   new FSReqCallback(binding_data, args.This(), args[0]->IsTrue());
 }
 
@@ -932,7 +934,8 @@ static void InternalModuleStat(const FunctionCallbackInfo<Value>& args) {
 }
 
 static void Stat(const FunctionCallbackInfo<Value>& args) {
-  BindingData* binding_data = Unwrap<BindingData>(args.Data());
+  BindingData* binding_data =
+      Environment::GetBindingData<BindingData>(args.Data());
   Environment* env = binding_data->env();
 
   const int argc = args.Length();
@@ -963,7 +966,8 @@ static void Stat(const FunctionCallbackInfo<Value>& args) {
 }
 
 static void LStat(const FunctionCallbackInfo<Value>& args) {
-  BindingData* binding_data = Unwrap<BindingData>(args.Data());
+  BindingData* binding_data =
+      Environment::GetBindingData<BindingData>(args.Data());
   Environment* env = binding_data->env();
 
   const int argc = args.Length();
@@ -995,7 +999,8 @@ static void LStat(const FunctionCallbackInfo<Value>& args) {
 }
 
 static void FStat(const FunctionCallbackInfo<Value>& args) {
-  BindingData* binding_data = Unwrap<BindingData>(args.Data());
+  BindingData* binding_data =
+      Environment::GetBindingData<BindingData>(args.Data());
   Environment* env = binding_data->env();
 
   const int argc = args.Length();
@@ -1658,7 +1663,8 @@ static void Open(const FunctionCallbackInfo<Value>& args) {
 }
 
 static void OpenFileHandle(const FunctionCallbackInfo<Value>& args) {
-  BindingData* binding_data = Unwrap<BindingData>(args.Data());
+  BindingData* binding_data =
+      Environment::GetBindingData<BindingData>(args.Data());
   Environment* env = binding_data->env();
   Isolate* isolate = env->isolate();
 
