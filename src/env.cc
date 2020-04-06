@@ -196,14 +196,17 @@ IsolateData::IsolateData(Isolate* isolate,
                          uv_loop_t* event_loop,
                          MultiIsolatePlatform* platform,
                          ArrayBufferAllocator* node_allocator,
-                         SnapshotData* snapshot_data)
+                         SnapshotData* snapshot_data,
+                         std::unique_ptr<ExternalReferencePreAllocations>
+                             pre_allocations)
     : isolate_(isolate),
       event_loop_(event_loop),
       allocator_(isolate->GetArrayBufferAllocator()),
       node_allocator_(node_allocator == nullptr ? nullptr
                                                 : node_allocator->GetImpl()),
       uses_node_allocator_(allocator_ == node_allocator_),
-      platform_(platform) {
+      platform_(platform),
+      pre_allocations_(std::move(pre_allocations)) {
   CHECK_NOT_NULL(allocator_);
 
   options_.reset(
@@ -306,6 +309,24 @@ void NoBindingData::Serialize(SnapshotCreator* creator,
   snapshot_data->EndWriteEntry();
 }
 
+ExternalReferencePreAllocations::ExternalReferencePreAllocations()
+  : no_binding_data_(operator new(sizeof(NoBindingData)), operator delete) {
+}
+
+void* ExternalReferencePreAllocations::no_binding_data() {
+  return no_binding_data_.release();
+}
+
+std::vector<intptr_t> ExternalReferencePreAllocations::references() const {
+  return { reinterpret_cast<intptr_t>(no_binding_data_.get()) };
+}
+
+HeapExternalReferences AllocateExternalRerefences() {
+  auto allocations = std::make_unique<ExternalReferencePreAllocations>();
+  std::vector<intptr_t> references = allocations->references();
+  return { std::move(allocations), std::move(references) };
+}
+
 void Environment::CreateProperties() {
   HandleScope handle_scope(isolate_);
   Local<Context> ctx = context();
@@ -317,8 +338,11 @@ void Environment::CreateProperties() {
     templ->Inherit(BaseObject::GetConstructorTemplate(this));
     set_as_callback_data_template(templ);
 
-    Local<External> external = MakeBindingCallbackData<NoBindingData>()
-        .ToLocalChecked();
+    void* allocation = isolate_data()->pre_allocations() != nullptr ?
+        isolate_data()->pre_allocations()->no_binding_data() : nullptr;
+
+    Local<External> external = MakeBindingCallbackData<NoBindingData>(
+        allocation).ToLocalChecked();
     set_as_callback_data(external);
     set_current_callback_data(external);
   }

@@ -1028,9 +1028,17 @@ int Start(int argc, char** argv) {
   }
 
   {
+    HeapExternalReferences heap_external_references =
+        AllocateExternalRerefences();
+
     Isolate::CreateParams params;
     std::vector<intptr_t> external_references = ExternalReferences::get_list();
+    external_references.insert(
+        external_references.end(),
+        heap_external_references.references.begin(),
+        heap_external_references.references.end());
     external_references.push_back(ExternalReferences::kEnd);
+
     SnapshotData* snapshot_data = nullptr;
 
     bool force_no_snapshot =
@@ -1049,7 +1057,9 @@ int Start(int argc, char** argv) {
                                    per_process::v8_platform.Platform(),
                                    result.args,
                                    result.exec_args,
-                                   snapshot_data);
+                                   snapshot_data,
+                                   std::move(
+                                       heap_external_references.allocations));
     result.exit_code = main_instance.Run();
   }
 

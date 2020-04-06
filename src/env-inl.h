@@ -73,6 +73,10 @@ inline worker::Worker* IsolateData::worker_context() const {
   return worker_context_;
 }
 
+ExternalReferencePreAllocations* IsolateData::pre_allocations() const {
+  return pre_allocations_.get();
+}
+
 inline v8::Local<v8::String> IsolateData::async_wrap_provider(int index) const {
   return async_wrap_providers_[index].Get(isolate_);
 }
@@ -364,14 +368,16 @@ Environment::BindingScope<T>::~BindingScope() {
 }
 
 template <typename T>
-v8::MaybeLocal<v8::External> Environment::MakeBindingCallbackData() {
+v8::MaybeLocal<v8::External> Environment::MakeBindingCallbackData(
+    void* allocation) {
   v8::Local<v8::Function> ctor;
   v8::Local<v8::Object> obj;
   if (!as_callback_data_template()->GetFunction(context()).ToLocal(&ctor) ||
       !ctor->NewInstance(context()).ToLocal(&obj)) {
     return v8::MaybeLocal<v8::External>();
   }
-  T* data = new T(this, obj);
+  if (allocation == nullptr) allocation = operator new(sizeof(T));
+  T* data = new(allocation) T(this, obj);
   // This won't compile if T is not a BaseObject subclass.
   CHECK_EQ(data, static_cast<BaseObject*>(data));
   return data->as_external();

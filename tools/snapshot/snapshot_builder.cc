@@ -76,7 +76,14 @@ std::string SnapshotBuilder::Generate(
   std::string result;
   int exit_code = 0;
 
+  HeapExternalReferences heap_external_references =
+      AllocateExternalRerefences();
+
   std::vector<intptr_t> external_references = ExternalReferences::get_list();
+  external_references.insert(
+      external_references.end(),
+      heap_external_references.references.begin(),
+      heap_external_references.references.end());
   external_references.push_back(ExternalReferences::kEnd);
 
   {
@@ -89,7 +96,9 @@ std::string SnapshotBuilder::Generate(
                                    uv_default_loop(),
                                    per_process::v8_platform.Platform(),
                                    args,
-                                   exec_args);
+                                   exec_args,
+                                   std::move(
+                                       heap_external_references.allocations));
       HandleScope scope(isolate);
       creator.SetDefaultContext(Context::New(isolate));
 

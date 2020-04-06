@@ -472,6 +472,7 @@ constexpr size_t kFsStatsBufferLength =
 
 class Environment;
 class SnapshotData;
+class ExternalReferencePreAllocations;
 
 class IsolateData : public MemoryRetainer, public Snapshottable {
  public:
@@ -479,7 +480,9 @@ class IsolateData : public MemoryRetainer, public Snapshottable {
               uv_loop_t* event_loop,
               MultiIsolatePlatform* platform = nullptr,
               ArrayBufferAllocator* node_allocator = nullptr,
-              SnapshotData* snapshot_data = nullptr);
+              SnapshotData* snapshot_data = nullptr,
+              std::unique_ptr<ExternalReferencePreAllocations>
+                  pre_allocations = {});
   SET_MEMORY_INFO_NAME(IsolateData)
   SET_SELF_SIZE(IsolateData)
   void MemoryInfo(MemoryTracker* tracker) const override;
@@ -497,6 +500,8 @@ class IsolateData : public MemoryRetainer, public Snapshottable {
 
   inline worker::Worker* worker_context() const;
   inline void set_worker_context(worker::Worker* context);
+
+  inline ExternalReferencePreAllocations* pre_allocations() const;
 
 #define VP(PropertyName, StringValue) V(v8::Private, PropertyName)
 #define VY(PropertyName, StringValue) V(v8::Symbol, PropertyName)
@@ -548,6 +553,7 @@ class IsolateData : public MemoryRetainer, public Snapshottable {
   MultiIsolatePlatform* platform_;
   std::shared_ptr<PerIsolateOptions> options_;
   worker::Worker* worker_context_ = nullptr;
+  std::unique_ptr<ExternalReferencePreAllocations> pre_allocations_;
 };
 
 struct ContextInfo {
@@ -911,7 +917,8 @@ class Environment : public MemoryRetainer, public Snapshottable {
   };
 
   template <typename T>
-  inline v8::MaybeLocal<v8::External> MakeBindingCallbackData();
+  inline v8::MaybeLocal<v8::External> MakeBindingCallbackData(
+      void* allocation = nullptr);
 
   static uv_key_t thread_local_env;
   static inline Environment* GetThreadLocalEnv();

@@ -40,6 +40,8 @@ class SnapshotData final {
   inline const std::vector<std::string>& errors() const;
   inline std::vector<uint8_t> release_storage();
 
+  // TODO(addaleax): Simplify by handling the SnapshotCreator and external
+  // references here.
   explicit inline SnapshotData(std::vector<uint8_t>&& storage);
   SnapshotData() = default;
 
@@ -87,6 +89,24 @@ class ExternalReferences {
   template <typename T, typename... Args>
   inline void HandleArgs(T* ptr, Args*... args);
 };
+
+class ExternalReferencePreAllocations {
+ public:
+  ExternalReferencePreAllocations();
+
+  void* no_binding_data();
+  std::vector<intptr_t> references() const;
+
+ private:
+  std::unique_ptr<void, void(*)(void*)> no_binding_data_;
+};
+
+// TODO(addaleax): Export this once snapshotting becomes public API in some way.
+struct HeapExternalReferences {
+  std::unique_ptr<ExternalReferencePreAllocations> allocations;
+  std::vector<intptr_t> references;
+};
+HeapExternalReferences AllocateExternalRerefences();
 
 }  // namespace node
 

@@ -23,11 +23,13 @@ using v8::Locker;
 using v8::Object;
 using v8::SealHandleScope;
 
-NodeMainInstance::NodeMainInstance(Isolate* isolate,
-                                   uv_loop_t* event_loop,
-                                   MultiIsolatePlatform* platform,
-                                   const std::vector<std::string>& args,
-                                   const std::vector<std::string>& exec_args)
+NodeMainInstance::NodeMainInstance(
+    Isolate* isolate,
+    uv_loop_t* event_loop,
+    MultiIsolatePlatform* platform,
+    const std::vector<std::string>& args,
+    const std::vector<std::string>& exec_args,
+    std::unique_ptr<ExternalReferencePreAllocations> allocations)
     : args_(args),
       exec_args_(exec_args),
       array_buffer_allocator_(nullptr),
@@ -36,8 +38,9 @@ NodeMainInstance::NodeMainInstance(Isolate* isolate,
       isolate_data_(nullptr),
       owns_isolate_(false),
       deserialize_mode_(false) {
-  isolate_data_ =
-      std::make_unique<IsolateData>(isolate_, event_loop, platform, nullptr);
+  // TODO(addaleax): Use CreateIsolateData.
+  isolate_data_ = std::make_unique<IsolateData>(
+      isolate_, event_loop, platform, nullptr, nullptr, std::move(allocations));
 
   IsolateSettings misc;
   SetIsolateMiscHandlers(isolate_, misc);
@@ -48,9 +51,10 @@ std::unique_ptr<NodeMainInstance> NodeMainInstance::Create(
     uv_loop_t* event_loop,
     MultiIsolatePlatform* platform,
     const std::vector<std::string>& args,
-    const std::vector<std::string>& exec_args) {
-  return std::unique_ptr<NodeMainInstance>(
-      new NodeMainInstance(isolate, event_loop, platform, args, exec_args));
+    const std::vector<std::string>& exec_args,
+    std::unique_ptr<ExternalReferencePreAllocations> allocations) {
+  return std::unique_ptr<NodeMainInstance>(new NodeMainInstance(
+      isolate, event_loop, platform, args, exec_args, std::move(allocations)));
 }
 
 NodeMainInstance::NodeMainInstance(
@@ -59,7 +63,8 @@ NodeMainInstance::NodeMainInstance(
     MultiIsolatePlatform* platform,
     const std::vector<std::string>& args,
     const std::vector<std::string>& exec_args,
-    SnapshotData* snapshot_data)
+    SnapshotData* snapshot_data,
+    std::unique_ptr<ExternalReferencePreAllocations> allocations)
     : args_(args),
       exec_args_(exec_args),
       array_buffer_allocator_(ArrayBufferAllocator::Create()),
@@ -79,11 +84,13 @@ NodeMainInstance::NodeMainInstance(
   deserialize_mode_ = snapshot_data != nullptr;
   // If the indexes are not nullptr, we are not deserializing
   CHECK_IMPLIES(deserialize_mode_, params->external_references != nullptr);
+  // TODO(addaleax): Use CreateIsolateData.
   isolate_data_ = std::make_unique<IsolateData>(isolate_,
                                                 event_loop,
                                                 platform,
                                                 array_buffer_allocator_.get(),
-                                                snapshot_data);
+                                                snapshot_data,
+                                                std::move(allocations));
   IsolateSettings s;
   SetIsolateMiscHandlers(isolate_, s);
   if (!deserialize_mode_) {

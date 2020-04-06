@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "node.h"
+#include "snapshot_support.h"
 #include "util.h"
 #include "uv.h"
 #include "v8.h"
@@ -42,7 +43,8 @@ class NodeMainInstance {
       uv_loop_t* event_loop,
       MultiIsolatePlatform* platform,
       const std::vector<std::string>& args,
-      const std::vector<std::string>& exec_args);
+      const std::vector<std::string>& exec_args,
+      std::unique_ptr<ExternalReferencePreAllocations> allocations);
 
   void Dispose();
 
@@ -53,7 +55,8 @@ class NodeMainInstance {
       MultiIsolatePlatform* platform,
       const std::vector<std::string>& args,
       const std::vector<std::string>& exec_args,
-      SnapshotData* snapshot_data = nullptr);
+      SnapshotData* snapshot_data = nullptr,
+      std::unique_ptr<ExternalReferencePreAllocations> allocations = {});
   ~NodeMainInstance();
 
   // Start running the Node.js instances, return the exit code when finished.
@@ -80,7 +83,9 @@ class NodeMainInstance {
                    uv_loop_t* event_loop,
                    MultiIsolatePlatform* platform,
                    const std::vector<std::string>& args,
-                   const std::vector<std::string>& exec_args);
+                   const std::vector<std::string>& exec_args,
+                   std::unique_ptr<ExternalReferencePreAllocations>
+                       allocations);
 
   std::vector<std::string> args_;
   std::vector<std::string> exec_args_;
