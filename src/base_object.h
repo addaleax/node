@@ -102,6 +102,11 @@ class BaseObject : public MemoryRetainer, public Snapshottable {
   static v8::Local<v8::FunctionTemplate> GetConstructorTemplate(
       Environment* env);
 
+  static v8::StartupData SerializeInternalFields(
+      v8::Local<v8::Object> object, int index, void* data);
+  virtual v8::StartupData SerializeInternalFields(
+      int index, SnapshotData* snapshot_data) const;
+
  protected:
   virtual inline void OnGCCollect();
 

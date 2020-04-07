@@ -47,6 +47,7 @@ using v8::Object;
 using v8::Private;
 using v8::SnapshotCreator;
 using v8::StackTrace;
+using v8::StartupData;
 using v8::String;
 using v8::Symbol;
 using v8::TracingController;
@@ -1325,6 +1326,32 @@ Local<FunctionTemplate> BaseObject::GetConstructorTemplate(Environment* env) {
     env->set_base_object_ctor_template(tmpl);
   }
   return tmpl;
+}
+
+StartupData BaseObject::SerializeInternalFields(
+    Local<Object> object, int index, void* data) {
+  // TODO(addaleax): Not an ideal way to get the Environment.
+  Environment* env = Environment::GetCurrent(object->CreationContext());
+  if (env == nullptr || !GetConstructorTemplate(env)->HasInstance(object))
+    return {};
+  const BaseObject* self = FromJSObject(object);
+  CHECK_NOT_NULL(self);
+  CHECK_EQ(self->object(), object);
+  return self->SerializeInternalFields(index, static_cast<SnapshotData*>(data));
+}
+
+StartupData BaseObject::SerializeInternalFields(
+    int index, SnapshotData* snapshot_data) const {
+  if (index == BaseObject::kSlot) {
+    // The 0th slot points back to the BaseObject* itself. We don't need to
+    // serialize it, the serialization of the global handle should have already
+    // occurred, and when deserializing, the BaseObject* slot should be reset
+    // with the correct value anyway.
+    return {};
+  }
+  snapshot_data->add_error(
+      SPrintF("Cannot serialize internal fields of %s", MemoryInfoName()));
+  return {};
 }
 
 }  // namespace node

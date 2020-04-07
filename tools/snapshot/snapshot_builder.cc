@@ -106,7 +106,8 @@ std::string SnapshotBuilder::Generate(
       env->Serialize(&creator, &snapshot_data);
       // XXX this is lazy, we should print the errors
       CHECK(snapshot_data.errors().empty());
-      size_t index = creator.AddContext(env->context());
+      size_t index = creator.AddContext(env->context(),
+          { BaseObject::SerializeInternalFields, &snapshot_data });
       CHECK_EQ(index, NodeMainInstance::kNodeContextIndex);
       CHECK_EQ(exit_code, 0);
     }
@@ -114,6 +115,7 @@ std::string SnapshotBuilder::Generate(
     // Must be out of HandleScope
     StartupData blob =
         creator.CreateBlob(SnapshotCreator::FunctionCodeHandling::kClear);
+    CHECK(snapshot_data.errors().empty()); // XXX again, not good
     CHECK(blob.CanBeRehashed());
     // Must be done while the snapshot creator isolate is entered i.e. the
     // creator is still alive.
