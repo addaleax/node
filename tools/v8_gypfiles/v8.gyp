@@ -1457,7 +1457,7 @@
           'variables': {
             'v8_dump_build_config_args': [
               '<(PRODUCT_DIR)/v8_build_config.json',
-              'dcheck_always_on=<(dcheck_always_on)',
+              'dcheck_always_on=1',
               'is_android=<(is_android)',
               'is_asan=<(asan)',
               'is_cfi=<(cfi_vptr)',

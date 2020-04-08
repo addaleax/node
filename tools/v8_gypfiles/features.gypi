@@ -68,7 +68,7 @@
     # Variables from BUILD.gn
 
     # Set to 1 to enable DCHECKs in release builds.
-    'dcheck_always_on%': 0,
+    'dcheck_always_on%': 1,
 
     # Sets -DV8_ENABLE_FUTURE.
     'v8_enable_future%': 0,
