@@ -396,13 +396,22 @@ void Environment::Serialize(SnapshotCreator* creator,
   {                                                                           \
     Local<TypeName> value = PropertyName();                                   \
     size_t index = value.IsEmpty() ?                                          \
-        SnapshotData::kEmptyIndex : creator->AddData(context, value);         \
-    snapshot_data->WriteIndex(index);                                  \
+        SnapshotData::kEmptyIndex : creator->AddData(value);                  \
+    snapshot_data->WriteIndex(index);                                         \
   }
   ENVIRONMENT_STRONG_PERSISTENT_TEMPLATES(V)
+#undef V
+
+  snapshot_data->WriteIndex(creator->AddData(context, context));
+#define V(PropertyName, TypeName)                                             \
+  {                                                                           \
+    Local<TypeName> value = PropertyName();                                   \
+    size_t index = value.IsEmpty() ?                                          \
+        SnapshotData::kEmptyIndex : creator->AddData(context, value);         \
+    snapshot_data->WriteIndex(index);                                         \
+  }
   ENVIRONMENT_STRONG_PERSISTENT_VALUES(V)
 #undef V
-  snapshot_data->WriteIndex(creator->AddData(context, context));
 
   size_t expected_base_object_count =
       initial_base_object_count_ + base_object_count();

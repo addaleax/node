@@ -390,11 +390,13 @@ constexpr size_t kFsStatsBufferLength =
   V(zero_return_string, "ZERO_RETURN")
 
 #define ENVIRONMENT_STRONG_PERSISTENT_TEMPLATES(V)                             \
+  V(as_callback_data, v8::External)                                            \
   V(as_callback_data_template, v8::FunctionTemplate)                           \
   V(async_wrap_ctor_template, v8::FunctionTemplate)                            \
   V(async_wrap_object_ctor_template, v8::FunctionTemplate)                     \
   V(base_object_ctor_template, v8::FunctionTemplate)                           \
   V(compiled_fn_entry_template, v8::ObjectTemplate)                            \
+  V(current_callback_data, v8::External)                                       \
   V(dir_instance_template, v8::ObjectTemplate)                                 \
   V(fd_constructor_template, v8::ObjectTemplate)                               \
   V(fdclose_constructor_template, v8::ObjectTemplate)                          \
@@ -422,7 +424,6 @@ constexpr size_t kFsStatsBufferLength =
   V(worker_snapshot_taker_template, v8::ObjectTemplate)
 
 #define ENVIRONMENT_STRONG_PERSISTENT_VALUES(V)                                \
-  V(as_callback_data, v8::External)                                            \
   V(async_hooks_after_function, v8::Function)                                  \
   V(async_hooks_before_function, v8::Function)                                 \
   V(async_hooks_binding, v8::Object)                                           \
@@ -431,7 +432,6 @@ constexpr size_t kFsStatsBufferLength =
   V(async_hooks_promise_resolve_function, v8::Function)                        \
   V(buffer_prototype_object, v8::Object)                                       \
   V(crypto_key_object_constructor, v8::Function)                               \
-  V(current_callback_data, v8::External)                                       \
   V(domain_callback, v8::Function)                                             \
   V(domexception_function, v8::Function)                                       \
   V(enhance_fatal_stack_after_inspector, v8::Function)                         \
