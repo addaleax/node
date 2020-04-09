@@ -1,6 +1,7 @@
 #include "node_errors.h"
 #include "util-inl.h"
 #include "base_object-inl.h"
+#include "node_messaging.h"
 
 namespace node {
 namespace util {
@@ -228,6 +229,98 @@ class WeakReference : public BaseObject {
   uint64_t reference_count_ = 0;
 };
 
+namespace test {
+// Class for testing cloning + transfering of BaseObjects.
+class CloneableDummy final : public BaseObject {
+ public:
+  CloneableDummy(Environment* env, Local<Object> object, std::string&& data)
+      : BaseObject(env, object), data_(data) {
+    MakeWeak();
+  }
+
+  static void New(const FunctionCallbackInfo<Value>& args) {
+    Environment* env = Environment::GetCurrent(args);
+    CHECK(args.IsConstructCall());
+    String::Utf8Value val(env->isolate(), args[0]);
+    if (*val == nullptr) return;
+    new CloneableDummy(env, args.This(), std::string(*val, val.length()));
+  }
+
+  static void Get(const FunctionCallbackInfo<Value>& args) {
+    CloneableDummy* self = Unwrap<CloneableDummy>(args.Holder());
+    Isolate* isolate = args.GetIsolate();
+    Local<Value> ret;
+    if (ToV8Value(isolate->GetCurrentContext(), self->data_).ToLocal(&ret))
+      args.GetReturnValue().Set(ret);
+  }
+
+  class StringData final : public worker::TransferData {
+   public:
+    explicit StringData(std::string&& str) : data_(std::move(str)) {}
+    explicit StringData(const std::string& str) : data_(str) {}
+
+    BaseObject* Deserialize(
+        Environment* env,
+        Local<Context> context,
+        std::unique_ptr<worker::TransferData> self) override {
+      Local<Object> obj;
+      if (!CloneableDummy::GetConstructorTemplate(env)
+              ->InstanceTemplate()->NewInstance(context).ToLocal(&obj)) {
+        return nullptr;
+      }
+
+      return new CloneableDummy(env, obj, std::move(data_));
+    }
+
+    SET_MEMORY_INFO_NAME(StringData)
+    SET_SELF_SIZE(StringData)
+    SET_NO_MEMORY_INFO()
+
+   private:
+    std::string data_;
+  };
+
+  BaseObject::TransferMode GetTransferMode() const override {
+    return BaseObject::TransferMode::kCloneable;
+  }
+
+  std::unique_ptr<worker::TransferData> TransferForMessaging() override {
+    return std::make_unique<StringData>(std::move(data_));
+  }
+
+  std::unique_ptr<worker::TransferData> CloneForMessaging() const override {
+    return std::make_unique<StringData>(data_);
+  }
+
+  static Local<FunctionTemplate> GetConstructorTemplate(Environment* env) {
+    Local<FunctionTemplate> templ = env->cloneable_dummy_ctor_template();
+    if (!templ.IsEmpty())
+      return templ;
+
+    {
+      Local<FunctionTemplate> t = env->NewFunctionTemplate(CloneableDummy::New);
+      t->SetClassName(FIXED_ONE_BYTE_STRING(env->isolate(), "CloneableDummy"));
+      t->InstanceTemplate()->SetInternalFieldCount(
+          CloneableDummy::kInternalFieldCount);
+      t->Inherit(BaseObject::GetConstructorTemplate(env));
+
+      env->SetProtoMethod(t, "get", CloneableDummy::Get);
+
+      env->set_cloneable_dummy_ctor_template(t);
+    }
+
+    return GetConstructorTemplate(env);
+  }
+
+  SET_MEMORY_INFO_NAME(CloneableDummy)
+  SET_SELF_SIZE(CloneableDummy)
+  SET_NO_MEMORY_INFO()
+
+ private:
+  std::string data_;
+};
+}  // namespace test
+
 static void GuessHandleType(const FunctionCallbackInfo<Value>& args) {
   Environment* env = Environment::GetCurrent(args);
   int fd;
@@ -332,6 +425,10 @@ void Initialize(Local<Object> target,
   env->SetProtoMethod(weak_ref, "decRef", WeakReference::DecRef);
   target->Set(context, weak_ref_string,
               weak_ref->GetFunction(context).ToLocalChecked()).Check();
+
+  target->Set(context, FIXED_ONE_BYTE_STRING(env->isolate(), "CloneableDummy"),
+              test::CloneableDummy::GetConstructorTemplate(env)
+                  ->GetFunction(context).ToLocalChecked()).Check();
 
   env->SetMethod(target, "guessHandleType", GuessHandleType);
 }
