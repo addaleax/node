@@ -413,23 +413,22 @@ void Message::MemoryInfo(MemoryTracker* tracker) const {
 MessagePortData::MessagePortData(MessagePort* owner) : owner_(owner) { }
 
 MessagePortData::~MessagePortData() {
-  CHECK_NULL(owner_);
+  CHECK_NULL(owner_.load());
   Disentangle();
 }
 
 void MessagePortData::MemoryInfo(MemoryTracker* tracker) const {
-  Mutex::ScopedLock lock(mutex_);
   tracker->TrackField("incoming_messages", incoming_messages_);
 }
 
 void MessagePortData::AddToIncomingQueue(Message&& message) {
   // This function will be called by other threads.
-  Mutex::ScopedLock lock(mutex_);
-  incoming_messages_.emplace_back(std::move(message));
+  incoming_messages_.Push(std::move(message));
 
-  if (owner_ != nullptr) {
-    Debug(owner_, "Adding message to incoming queue");
-    owner_->TriggerAsync();
+  MessagePort* owner = owner_.load();
+  if (owner != nullptr) {
+    Debug(owner, "Adding message to incoming queue");
+    owner->TriggerAsync();
   }
 }
 
@@ -519,14 +518,7 @@ void MessagePort::TriggerAsync() {
 void MessagePort::Close(v8::Local<v8::Value> close_callback) {
   Debug(this, "Closing message port, data set = %d", static_cast<int>(!!data_));
 
-  if (data_) {
-    // Wrap this call with accessing the mutex, so that TriggerAsync()
-    // can check IsHandleClosing() without race conditions.
-    Mutex::ScopedLock sibling_lock(data_->mutex_);
-    HandleWrap::Close(close_callback);
-  } else {
-    HandleWrap::Close(close_callback);
-  }
+  HandleWrap::Close(close_callback);
 }
 
 void MessagePort::New(const FunctionCallbackInfo<Value>& args) {
@@ -560,11 +552,7 @@ MessagePort* MessagePort::New(
     port->Detach();
     port->data_ = std::move(data);
 
-    // This lock is here to avoid race conditions with the `owner_` read
-    // in AddToIncomingQueue(). (This would likely be unproblematic without it,
-    // but it's better to be safe than sorry.)
-    Mutex::ScopedLock lock(port->data_->mutex_);
-    port->data_->owner_ = port;
+    port->data_->owner_.store(port);
     // If the existing MessagePortData object had pending messages, this is
     // the easiest way to run that queue.
     port->TriggerAsync();
@@ -576,24 +564,19 @@ MaybeLocal<Value> MessagePort::ReceiveMessage(Local<Context> context,
                                               bool only_if_receiving) {
   Message received;
   {
-    // Get the head of the message queue.
-    Mutex::ScopedLock lock(data_->mutex_);
-
     Debug(this, "MessagePort has message");
 
     bool wants_message = receiving_messages_ || !only_if_receiving;
+
     // We have nothing to do if:
     // - There are no pending messages
     // - We are not intending to receive messages, and the message we would
     //   receive is not the final "close" message.
-    if (data_->incoming_messages_.empty() ||
-        (!wants_message &&
-         !data_->incoming_messages_.front().IsCloseMessage())) {
-      return env()->no_message_symbol();
-    }
-
-    received = std::move(data_->incoming_messages_.front());
-    data_->incoming_messages_.pop_front();
+    bool had_message = data_->incoming_messages_.PopIf(
+        &received, [&](const Message& message) {
+          return wants_message || message.IsCloseMessage();
+        });
+    if (!had_message) return env()->no_message_symbol();
   }
 
   if (received.IsCloseMessage()) {
@@ -611,12 +594,8 @@ void MessagePort::OnMessage() {
   HandleScope handle_scope(env()->isolate());
   Local<Context> context = object(env()->isolate())->CreationContext();
 
-  size_t processing_limit;
-  {
-    Mutex::ScopedLock(data_->mutex_);
-    processing_limit = std::max(data_->incoming_messages_.size(),
-                                static_cast<size_t>(1000));
-  }
+  size_t processing_limit= std::max(data_->incoming_messages_.size(),
+                                    static_cast<size_t>(1000));
 
   // data_ can only ever be modified by the owner thread, so no need to lock.
   // However, the message port may be transferred while it is processing
@@ -668,8 +647,7 @@ void MessagePort::OnClose() {
 
 std::unique_ptr<MessagePortData> MessagePort::Detach() {
   CHECK(data_);
-  Mutex::ScopedLock lock(data_->mutex_);
-  data_->owner_ = nullptr;
+  data_->owner_.store(nullptr);
   return std::move(data_);
 }
 
@@ -827,7 +805,6 @@ void MessagePort::PostMessage(const FunctionCallbackInfo<Value>& args) {
 void MessagePort::Start() {
   Debug(this, "Start receiving messages");
   receiving_messages_ = true;
-  Mutex::ScopedLock lock(data_->mutex_);
   if (!data_->incoming_messages_.empty())
     TriggerAsync();
 }

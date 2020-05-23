@@ -5,7 +5,7 @@
 
 #include "env.h"
 #include "node_mutex.h"
-#include <list>
+#include <atomic>
 
 namespace node {
 namespace worker {
@@ -14,6 +14,150 @@ class MessagePortData;
 class MessagePort;
 
 typedef MaybeStackBuffer<v8::Local<v8::Value>, 8> TransferList;
+
+// Single-producer, single-consumer lock-free queue, implemented as a
+// linked list.
+template <typename T>
+class AtomicQueue {
+ private:
+  struct Node {
+    std::atomic<Node*> next { nullptr };
+    T item;
+  };
+
+ public:
+  AtomicQueue() = default;
+  ~AtomicQueue();
+
+  // Push() and Pop() calls may occur concurrently, but not two Push() calls or
+  // two Pop() calls.
+  inline void Push(T&& item);
+  inline bool Pop(T* item);
+  template <typename Pred>
+  inline bool PopIf(T* item, Pred&& pred);
+
+  // Iterate over all items in the queue. This may not occur concurrently
+  // with Pop() calls.
+  class const_iterator {
+   public:
+    inline bool operator==(const const_iterator& other) const;
+    inline bool operator!=(const const_iterator& other) const;
+    inline const_iterator& operator++();
+    inline const T& operator*() const;
+
+   private:
+    explicit const_iterator(Node* n);
+    Node* n;
+
+    friend class AtomicQueue;
+  };
+  inline const_iterator begin() const;
+  inline const_iterator end() const;
+  inline bool empty() const;
+  inline size_t size() const;
+
+  AtomicQueue(const AtomicQueue&) = delete;
+  AtomicQueue& operator=(const AtomicQueue&) = delete;
+  AtomicQueue(AtomicQueue&&) = delete;
+  AtomicQueue& operator=(AtomicQueue&&) = delete;
+
+ private:
+  std::atomic<Node*> write_head_ { nullptr };
+  std::atomic<Node*> read_head_ { nullptr };
+  std::atomic<size_t> size_ { 0 };
+};
+
+template <typename T>
+AtomicQueue<T>::const_iterator::const_iterator(Node* n) : n(n) {}
+
+template <typename T>
+bool AtomicQueue<T>::const_iterator::operator==(
+    const const_iterator& other) const {
+  return other.n == n;
+}
+
+template <typename T>
+bool AtomicQueue<T>::const_iterator::operator!=(
+    const const_iterator& other) const {
+  return other.n != n;
+}
+
+template <typename T>
+typename AtomicQueue<T>::const_iterator&
+AtomicQueue<T>::const_iterator::operator++() {
+  n = n->next.load();
+  return *this;
+}
+
+template <typename T>
+const T& AtomicQueue<T>::const_iterator::operator*() const {
+  return n->item;
+}
+
+template <typename T>
+typename AtomicQueue<T>::const_iterator AtomicQueue<T>::begin() const {
+  return const_iterator { read_head_.load() };
+}
+
+template <typename T>
+typename AtomicQueue<T>::const_iterator AtomicQueue<T>::end() const {
+  return const_iterator { nullptr };
+}
+
+template <typename T>
+bool AtomicQueue<T>::empty() const {
+  return size() == 0;
+}
+
+template <typename T>
+size_t AtomicQueue<T>::size() const {
+  return size_.load();
+}
+
+template <typename T>
+AtomicQueue<T>::~AtomicQueue() {
+  while (Pop(nullptr));
+}
+
+template <typename T>
+void AtomicQueue<T>::Push(T&& item) {
+  size_.fetch_add(1);
+  Node* new_head = new Node { { nullptr }, std::move(item) };
+  Node* old_head = write_head_.load();
+  if (old_head != nullptr)
+    old_head->next.store(new_head);
+
+  Node* null_ptr = nullptr;
+  read_head_.compare_exchange_strong(null_ptr, new_head);
+  write_head_.store(new_head);
+}
+
+template <typename T>
+template <typename Pred>
+bool AtomicQueue<T>::PopIf(T* item, Pred&& pred) {
+  Node* old_head = read_head_.exchange(nullptr);
+  if (old_head == nullptr || !pred(old_head->item)) {
+    read_head_.exchange(old_head);
+    return false;
+  }
+  Node* next = old_head->next.load();
+  Node* null_ptr = nullptr;
+  read_head_.compare_exchange_strong(null_ptr, next);
+  if (next == nullptr) {
+    Node* single_entry = old_head;
+    write_head_.compare_exchange_strong(single_entry, nullptr);
+  }
+  if (item != nullptr)
+    *item = std::move(old_head->item);
+  delete old_head;
+  size_.fetch_sub(1);
+  return true;
+}
+
+template <typename T>
+bool AtomicQueue<T>::Pop(T* item) {
+  return PopIf(item, [](const T&) { return true; });
+}
 
 // Represents a single communication message.
 class Message : public MemoryRetainer {
@@ -113,11 +257,8 @@ class MessagePortData : public MemoryRetainer {
   SET_SELF_SIZE(MessagePortData)
 
  private:
-  // This mutex protects all fields below it, with the exception of
-  // sibling_.
-  mutable Mutex mutex_;
-  std::list<Message> incoming_messages_;
-  MessagePort* owner_ = nullptr;
+  AtomicQueue<Message> incoming_messages_;
+  std::atomic<MessagePort*> owner_ { nullptr };
   // This mutex protects the sibling_ field and is shared between two entangled
   // MessagePorts. If both mutexes are acquired, this one needs to be
   // acquired first.
