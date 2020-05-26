@@ -39,6 +39,7 @@ using v8::HandleScope;
 using v8::Integer;
 using v8::Isolate;
 using v8::Local;
+using v8::Map;
 using v8::MaybeLocal;
 using v8::Name;
 using v8::Number;
@@ -414,6 +415,11 @@ static void SetupHooks(const FunctionCallbackInfo<Value>& args) {
   SET_HOOK_FN(destroy);
   SET_HOOK_FN(promise_resolve);
 #undef SET_HOOK_FN
+
+  CHECK(args[1]->IsMap());
+  CHECK(args[2]->IsMap());
+  env->async_hooks()->set_js_execution_async_resources(args[1].As<Map>());
+  env->async_hooks()->set_cached_resource_holder(args[2].As<Map>());
 }
 
 static void EnablePromiseHook(const FunctionCallbackInfo<Value>& args) {
@@ -574,6 +580,16 @@ Local<FunctionTemplate> AsyncWrap::GetConstructorTemplate(Environment* env) {
   return tmpl;
 }
 
+static void ExecutionAsyncResource(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args);
+  args.GetReturnValue().Set(env->async_hooks()->execution_async_resource());
+}
+
+static void ClearAsyncIdStack(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args);
+  env->async_hooks()->clear_async_id_stack();
+}
+
 void AsyncWrap::Initialize(Local<Object> target,
                            Local<Value> unused,
                            Local<Context> context,
@@ -590,6 +606,8 @@ void AsyncWrap::Initialize(Local<Object> target,
   env->SetMethod(target, "enablePromiseHook", EnablePromiseHook);
   env->SetMethod(target, "disablePromiseHook", DisablePromiseHook);
   env->SetMethod(target, "registerDestroyHook", RegisterDestroyHook);
+  env->SetMethod(target, "executionAsyncResource", ExecutionAsyncResource);
+  env->SetMethod(target, "clearAsyncIdStack", ClearAsyncIdStack);
 
   PropertyAttribute ReadOnlyDontDelete =
       static_cast<PropertyAttribute>(ReadOnly | DontDelete);
@@ -622,10 +640,6 @@ void AsyncWrap::Initialize(Local<Object> target,
                          "async_id_fields",
                          env->async_hooks()->async_id_fields().GetJSArray());
 
-  FORCE_SET_TARGET_FIELD(target,
-                         "execution_async_resources",
-                         env->async_hooks()->execution_async_resources());
-
   target->Set(context,
               env->async_ids_stack_string(),
               env->async_hooks()->async_ids_stack().GetJSArray()).Check();
@@ -646,6 +660,8 @@ void AsyncWrap::Initialize(Local<Object> target,
   SET_HOOKS_CONSTANT(kTriggerAsyncId);
   SET_HOOKS_CONSTANT(kAsyncIdCounter);
   SET_HOOKS_CONSTANT(kDefaultTriggerAsyncId);
+  SET_HOOKS_CONSTANT(kCachedResourceIsValid);
+  SET_HOOKS_CONSTANT(kUsesExecutionAsyncResource);
   SET_HOOKS_CONSTANT(kStackLength);
 #undef SET_HOOKS_CONSTANT
   FORCE_SET_TARGET_FIELD(target, "constants", constants);
