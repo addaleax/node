@@ -346,7 +346,7 @@ static void uv_tty_capture_initial_style(
   style_captured = 1;
 }
 
-
+static int calls = 0;
 int uv_tty_set_mode(uv_tty_t* tty, uv_tty_mode_t mode) {
   DWORD flags;
   unsigned char was_reading;
@@ -389,6 +389,8 @@ int uv_tty_set_mode(uv_tty_t* tty, uv_tty_mode_t mode) {
     alloc_cb = NULL;
     read_cb = NULL;
   }
+  int c = calls++;
+  fprintf(stderr, "[%d] set mode = %d, was_reading = %d\r\n", c, (int)mode, (int) was_reading);
 
   uv_sem_wait(&uv_tty_output_lock);
   if (!SetConsoleMode(tty->handle, flags)) {
@@ -409,6 +411,7 @@ int uv_tty_set_mode(uv_tty_t* tty, uv_tty_mode_t mode) {
       return uv_translate_sys_error(err);
     }
   }
+  fprintf(stderr, "[%d] complete set mode\r\n", c);
 
   return 0;
 }
@@ -1031,12 +1034,14 @@ int uv_tty_read_start(uv_tty_t* handle, uv_alloc_cb alloc_cb,
   /* If reading was stopped and then started again, there could still be a read
    * request pending. */
   if (handle->flags & UV_HANDLE_READ_PENDING) {
+    fprintf(stderr, "Ignore read_start because read pending\r\n");
     return 0;
   }
 
   /* Maybe the user stopped reading half-way while processing key events.
    * Short-circuit if this could be the case. */
   if (handle->tty.rd.last_key_len > 0) {
+    fprintf(stderr, "Short-circuiting because stop halway through processing key events\r\n");
     SET_REQ_SUCCESS(&handle->read_req);
     uv_insert_pending_req(handle->loop, (uv_req_t*) &handle->read_req);
     /* Make sure no attempt is made to insert it again until it's handled. */
@@ -1045,6 +1050,7 @@ int uv_tty_read_start(uv_tty_t* handle, uv_alloc_cb alloc_cb,
     return 0;
   }
 
+  fprintf(stderr, "Queueing %s read due to read_start\r\n", (handle->flags & UV_HANDLE_TTY_RAW) ? "raw" : "line-buffered");
   uv_tty_queue_read(loop, handle);
 
   return 0;
@@ -1058,10 +1064,13 @@ int uv_tty_read_stop(uv_tty_t* handle) {
   handle->flags &= ~UV_HANDLE_READING;
   DECREASE_ACTIVE_COUNT(handle->loop, handle);
 
-  if (!(handle->flags & UV_HANDLE_READ_PENDING))
+  if (!(handle->flags & UV_HANDLE_READ_PENDING)) {
+    fprintf(stderr, "Ignore read_stop because no read pending\r\n");
     return 0;
+  }
 
   if (handle->flags & UV_HANDLE_TTY_RAW) {
+    fprintf(stderr, "Cancelling raw read\r\n");
     /* Cancel raw read. Write some bullshit event to force the console wait to
      * return. */
     memset(&record, 0, sizeof record);
@@ -1070,12 +1079,15 @@ int uv_tty_read_stop(uv_tty_t* handle) {
       return GetLastError();
     }
   } else if (!(handle->flags & UV_HANDLE_CANCELLATION_PENDING)) {
+    fprintf(stderr, "Cancelling line-buffered read\r\n");
     /* Cancel line-buffered read if not already pending */
     err = uv__cancel_read_console(handle);
     if (err)
       return err;
 
     handle->flags |= UV_HANDLE_CANCELLATION_PENDING;
+  } else {
+    fprintf(stderr, "Not cancelling because cancellation already pending\r\n");
   }
 
   return 0;
