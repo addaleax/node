@@ -94,7 +94,7 @@ int RunNodeInstance(MultiIsolatePlatform* platform,
         snapshot_config = node::SnapshotConfig{};
       }
       snapshot_config.value().flags = static_cast<node::SnapshotFlags>(
-          static_cast<uint32_t>(snapshot_config.value().flags) &
+          static_cast<uint32_t>(snapshot_config.value().flags) |
           static_cast<uint32_t>(node::SnapshotFlags::kWithoutCodeCache));
     } else if (arg == "--embedder-snapshot-blob") {
       assert(i + 1 < args.size());

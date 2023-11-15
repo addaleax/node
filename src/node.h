@@ -663,7 +663,7 @@ enum Flags : uint64_t {
 enum class SnapshotFlags : uint32_t {
   kDefault = 0,
   // Whether code cache should be generated as part of the snapshot.
-  // Code cache reduce the time spent on compiling functions included
+  // Code cache reduces the time spent on compiling functions included
   // in the snapshot at the expense of a bigger snapshot size and
   // potentially breaking portability of the snapshot.
   kWithoutCodeCache = 1 << 0,
@@ -683,7 +683,7 @@ struct SnapshotConfig {
   // LoadEnvironment() to run a script matching this path. In that case the
   // snapshot is generated as a custom snapshot and the event loop is run, so
   // the snapshot builder can execute asynchronous operations as long as they
-  // are run to completion when the snasphot is taken.
+  // are run to completion when the snapshot is taken.
   std::optional<std::string> builder_script_path;
 };
 
