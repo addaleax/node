@@ -337,16 +337,18 @@ static MaybeLocal<Object> ConvertHeapStatsToJSObject(
   auto space_stats_tmpl = env->space_stats_template();
   auto heap_stats_tmpl = env->v8_heap_statistics_template();
   if (object_stats_template.IsEmpty()) {
-    std::string_view object_stats_names[] = {"allocated_bytes", "object_count"};
+    static constexpr std::string_view object_stats_names[] = {"allocated_bytes",
+                                                              "object_count"};
     object_stats_template =
         DictionaryTemplate::New(isolate, object_stats_names);
     env->set_object_stats_template(object_stats_template);
   }
   if (page_stats_tmpl.IsEmpty()) {
-    std::string_view page_stats_names[] = {"committed_size_bytes",
-                                           "resident_size_bytes",
-                                           "used_size_bytes",
-                                           "object_statistics"};
+    static constexpr std::string_view page_stats_names[] = {
+        "committed_size_bytes",
+        "resident_size_bytes",
+        "used_size_bytes",
+        "object_statistics"};
     page_stats_tmpl = DictionaryTemplate::New(isolate, page_stats_names);
     env->set_page_stats_template(page_stats_tmpl);
   }
@@ -358,21 +360,23 @@ static MaybeLocal<Object> ConvertHeapStatsToJSObject(
     env->set_free_list_statistics_template(free_list_statistics_template);
   }
   if (space_stats_tmpl.IsEmpty()) {
-    std::string_view space_stats_names[] = {"name",
-                                            "committed_size_bytes",
-                                            "resident_size_bytes",
-                                            "used_size_bytes",
-                                            "page_stats",
-                                            "free_list_stats"};
+    static constexpr std::string_view space_stats_names[] = {
+        "name",
+        "committed_size_bytes",
+        "resident_size_bytes",
+        "used_size_bytes",
+        "page_stats",
+        "free_list_stats"};
     space_stats_tmpl = DictionaryTemplate::New(isolate, space_stats_names);
     env->set_space_stats_template(space_stats_tmpl);
   }
   if (heap_stats_tmpl.IsEmpty()) {
-    std::string_view heap_statistics_names[] = {"committed_size_bytes",
-                                                "resident_size_bytes",
-                                                "used_size_bytes",
-                                                "space_statistics",
-                                                "type_names"};
+    static constexpr std::string_view heap_statistics_names[] = {
+        "committed_size_bytes",
+        "resident_size_bytes",
+        "used_size_bytes",
+        "space_statistics",
+        "type_names"};
     heap_stats_tmpl = DictionaryTemplate::New(isolate, heap_statistics_names);
     env->set_v8_heap_statistics_template(heap_stats_tmpl);
   }

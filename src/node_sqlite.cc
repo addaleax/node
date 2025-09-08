@@ -124,7 +124,7 @@ namespace {
 Local<DictionaryTemplate> getLazyIterTemplate(Environment* env) {
   auto iter_template = env->iter_template();
   if (iter_template.IsEmpty()) {
-    std::string_view iter_keys[] = {"done", "value"};
+    static constexpr std::string_view iter_keys[] = {"done", "value"};
     iter_template = DictionaryTemplate::New(env->isolate(), iter_keys);
     env->set_iter_template(iter_template);
   }
@@ -2254,7 +2254,7 @@ void StatementSync::Columns(const FunctionCallbackInfo<Value>& args) {
   LocalVector<Value> cols(isolate);
   auto sqlite_column_template = env->sqlite_column_template();
   if (sqlite_column_template.IsEmpty()) {
-    std::string_view col_keys[] = {
+    static constexpr std::string_view col_keys[] = {
         "column", "database", "name", "table", "type"};
     sqlite_column_template = DictionaryTemplate::New(isolate, col_keys);
     env->set_sqlite_column_template(sqlite_column_template);

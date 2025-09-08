@@ -267,13 +267,14 @@ static void GetCallSites(const FunctionCallbackInfo<Value>& args) {
 
   auto callsite_template = env->callsite_template();
   if (callsite_template.IsEmpty()) {
-    std::string_view names[] = {"functionName",
-                                "scriptId",
-                                "scriptName",
-                                "lineNumber",
-                                "columnNumber",
-                                // TODO(legendecas): deprecate CallSite.column.
-                                "column"};
+    static constexpr std::string_view names[] = {
+        "functionName",
+        "scriptId",
+        "scriptName",
+        "lineNumber",
+        "columnNumber",
+        // TODO(legendecas): deprecate CallSite.column.
+        "column"};
     callsite_template = DictionaryTemplate::New(isolate, names);
     env->set_callsite_template(callsite_template);
   }

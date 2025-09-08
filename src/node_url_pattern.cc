@@ -399,7 +399,7 @@ MaybeLocal<Value> URLPattern::URLPatternResult::ToJSValue(
 
   auto tmpl = env->urlpatternresult_template();
   if (tmpl.IsEmpty()) {
-    std::string_view namesVec[] = {
+    static constexpr std::string_view namesVec[] = {
         "inputs",
         "protocol",
         "username",
@@ -417,29 +417,59 @@ MaybeLocal<Value> URLPattern::URLPatternResult::ToJSValue(
   size_t index = 0;
   auto context = isolate->GetCurrentContext();
 
+  // We are using a DictionaryTemplate to create the URLPatternResult
+  // object.  We want to make sure that the properties are created without
+  // errors before we call NewInstance, and bail out early if any fail.
+
+  v8::Local<v8::Array> inputs;
+  if (!Array::New(context,
+                  result.inputs.size(),
+                  [&index, &inputs = result.inputs, env]() {
+                    auto& input = inputs[index++];
+                    if (std::holds_alternative<std::string_view>(input)) {
+                      auto input_str = std::get<std::string_view>(input);
+                      return ToV8Value(env->context(), input_str);
+                    } else {
+                      DCHECK(
+                          std::holds_alternative<ada::url_pattern_init>(input));
+                      auto init = std::get<ada::url_pattern_init>(input);
+                      return URLPatternInit::ToJsObject(env, init);
+                    }
+                  })
+           .ToLocal(&inputs)) {
+    return {};
+  }
+
+  Local<Object> results[8];
+  if (!URLPatternComponentResult::ToJSObject(env, result.protocol)
+           .ToLocal(&results[0]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.username)
+           .ToLocal(&results[1]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.password)
+           .ToLocal(&results[2]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.hostname)
+           .ToLocal(&results[3]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.port)
+           .ToLocal(&results[4]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.pathname)
+           .ToLocal(&results[5]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.search)
+           .ToLocal(&results[6]) ||
+      !URLPatternComponentResult::ToJSObject(env, result.hash)
+           .ToLocal(&results[7])) {
+    return {};
+  }
+
   MaybeLocal<Value> vals[] = {
-      Array::New(context,
-                 result.inputs.size(),
-                 [&index, &inputs = result.inputs, env]() {
-                   auto& input = inputs[index++];
-                   if (std::holds_alternative<std::string_view>(input)) {
-                     auto input_str = std::get<std::string_view>(input);
-                     return ToV8Value(env->context(), input_str);
-                   } else {
-                     DCHECK(
-                         std::holds_alternative<ada::url_pattern_init>(input));
-                     auto init = std::get<ada::url_pattern_init>(input);
-                     return URLPatternInit::ToJsObject(env, init);
-                   }
-                 }),
-      URLPatternComponentResult::ToJSObject(env, result.protocol),
-      URLPatternComponentResult::ToJSObject(env, result.username),
-      URLPatternComponentResult::ToJSObject(env, result.password),
-      URLPatternComponentResult::ToJSObject(env, result.hostname),
-      URLPatternComponentResult::ToJSObject(env, result.port),
-      URLPatternComponentResult::ToJSObject(env, result.pathname),
-      URLPatternComponentResult::ToJSObject(env, result.search),
-      URLPatternComponentResult::ToJSObject(env, result.hash),
+      inputs,
+      results[0], /** protocol */
+      results[1], /** username */
+      results[2], /** password */
+      results[3], /** hostname */
+      results[4], /** port */
+      results[5], /** pathname */
+      results[6], /** search */
+      results[7], /** hash */
   };
   return tmpl->NewInstance(env->context(), vals);
 }
