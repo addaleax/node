@@ -1033,6 +1033,14 @@ class JSONOutputStream final : public v8::OutputStream {
   std::ostringstream out_stream_;
 };
 
+template <typename T>
+inline bool IsAnyEntryEmpty(const T& t) {
+  for (const auto& e : t) {
+    if (e.IsEmpty()) return true;
+  }
+  return false;
+}
+
 #ifdef _WIN32
 // Returns true if OS==Windows and filename ends in .bat or .cmd,
 // case insensitive.

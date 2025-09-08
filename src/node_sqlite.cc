@@ -2273,6 +2273,7 @@ void StatementSync::Columns(const FunctionCallbackInfo<Value>& args) {
         NullableSQLiteStringToValue(
             isolate, sqlite3_column_decltype(stmt->statement_, i)),
     };
+    if (IsAnyEntryEmpty(values)) return;
 
     cols.emplace_back(
         sqlite_column_template->NewInstance(env->context(), values));

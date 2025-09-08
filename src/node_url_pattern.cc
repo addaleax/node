@@ -440,37 +440,18 @@ MaybeLocal<Value> URLPattern::URLPatternResult::ToJSValue(
     return {};
   }
 
-  Local<Object> results[8];
-  if (!URLPatternComponentResult::ToJSObject(env, result.protocol)
-           .ToLocal(&results[0]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.username)
-           .ToLocal(&results[1]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.password)
-           .ToLocal(&results[2]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.hostname)
-           .ToLocal(&results[3]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.port)
-           .ToLocal(&results[4]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.pathname)
-           .ToLocal(&results[5]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.search)
-           .ToLocal(&results[6]) ||
-      !URLPatternComponentResult::ToJSObject(env, result.hash)
-           .ToLocal(&results[7])) {
-    return {};
-  }
-
   MaybeLocal<Value> vals[] = {
       inputs,
-      results[0], /** protocol */
-      results[1], /** username */
-      results[2], /** password */
-      results[3], /** hostname */
-      results[4], /** port */
-      results[5], /** pathname */
-      results[6], /** search */
-      results[7], /** hash */
+      URLPatternComponentResult::ToJSObject(env, result.protocol),
+      URLPatternComponentResult::ToJSObject(env, result.username),
+      URLPatternComponentResult::ToJSObject(env, result.password),
+      URLPatternComponentResult::ToJSObject(env, result.hostname),
+      URLPatternComponentResult::ToJSObject(env, result.port),
+      URLPatternComponentResult::ToJSObject(env, result.pathname),
+      URLPatternComponentResult::ToJSObject(env, result.search),
+      URLPatternComponentResult::ToJSObject(env, result.hash),
   };
+  if (IsAnyEntryEmpty(vals)) return {};
   return tmpl->NewInstance(env->context(), vals);
 }
 

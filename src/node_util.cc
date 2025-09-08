@@ -305,6 +305,7 @@ static void GetCallSites(const FunctionCallbackInfo<Value>& args) {
         Integer::NewFromUnsigned(isolate, stack_frame->GetColumn()),
     };
 
+    if (IsAnyEntryEmpty(values)) return;
     callsite_objects.push_back(
         callsite_template->NewInstance(env->context(), values));
   }
