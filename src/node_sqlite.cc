@@ -2273,10 +2273,14 @@ void StatementSync::Columns(const FunctionCallbackInfo<Value>& args) {
         NullableSQLiteStringToValue(
             isolate, sqlite3_column_decltype(stmt->statement_, i)),
     };
-    if (IsAnyEntryEmpty(values)) return;
 
-    cols.emplace_back(
-        sqlite_column_template->NewInstance(env->context(), values));
+    Local<Object> values_obj;
+    if (!CheckedDictionaryInstance(
+             sqlite_column_template, env->context(), values)
+             .ToLocal(&values_obj)) {
+      return;
+    }
+    cols.emplace_back(values_obj);
   }
 
   args.GetReturnValue().Set(Array::New(isolate, cols.data(), cols.size()));

@@ -451,8 +451,7 @@ MaybeLocal<Value> URLPattern::URLPatternResult::ToJSValue(
       URLPatternComponentResult::ToJSObject(env, result.search),
       URLPatternComponentResult::ToJSObject(env, result.hash),
   };
-  if (IsAnyEntryEmpty(vals)) return {};
-  return tmpl->NewInstance(env->context(), vals);
+  return CheckedDictionaryInstance(tmpl, env->context(), vals);
 }
 
 std::optional<ada::url_pattern_options>

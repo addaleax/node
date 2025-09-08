@@ -305,9 +305,12 @@ static void GetCallSites(const FunctionCallbackInfo<Value>& args) {
         Integer::NewFromUnsigned(isolate, stack_frame->GetColumn()),
     };
 
-    if (IsAnyEntryEmpty(values)) return;
-    callsite_objects.push_back(
-        callsite_template->NewInstance(env->context(), values));
+    Local<Object> callsite_object;
+    if (!CheckedDictionaryInstance(callsite_template, env->context(), values)
+             .ToLocal(&callsite_object)) {
+      return;
+    }
+    callsite_objects.emplace_back(callsite_object);
   }
 
   Local<Array> callsites =

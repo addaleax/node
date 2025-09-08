@@ -1041,6 +1041,14 @@ inline bool IsAnyEntryEmpty(const T& t) {
   return false;
 }
 
+inline v8::MaybeLocal<v8::Object> CheckedDictionaryInstance(
+    v8::Local<v8::DictionaryTemplate> tmpl,
+    v8::Local<v8::Context> context,
+    v8::MemorySpan<v8::MaybeLocal<v8::Value>> property_values) {
+  if (IsAnyEntryEmpty(property_values)) return {};
+  return tmpl->NewInstance(context, property_values);
+}
+
 #ifdef _WIN32
 // Returns true if OS==Windows and filename ends in .bat or .cmd,
 // case insensitive.

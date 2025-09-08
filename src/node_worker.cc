@@ -1117,8 +1117,14 @@ void Worker::GetHeapStatistics(const FunctionCallbackInfo<Value>& args) {
               Number::New(isolate, heap_stats->used_global_handles_size()),
               Number::New(isolate, heap_stats->external_memory())};
 
-          Local<Value> args[] = {
-              tmpl->NewInstance(env->context(), heap_stats_values)};
+          Local<Object> heap_stats_object;
+          if (!CheckedDictionaryInstance(
+                   tmpl, env->context(), heap_stats_values)
+                   .ToLocal(&heap_stats_object)) {
+            return;
+          }
+
+          Local<Value> args[] = {heap_stats_object};
           taker->get()->MakeCallback(
               env->ondone_string(), arraysize(args), args);
           // implicitly delete `taker`

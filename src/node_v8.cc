@@ -401,8 +401,12 @@ static MaybeLocal<Object> ConvertHeapStatsToJSObject(
                 isolate, static_cast<uint32_t>(object_stats.allocated_bytes)),
             Uint32::NewFromUnsigned(
                 isolate, static_cast<uint32_t>(object_stats.object_count))};
-        Local<Object> object_stats_object =
-            object_stats_template->NewInstance(context, object_stats_values);
+        Local<Object> object_stats_object;
+        if (!CheckedDictionaryInstance(
+                 object_stats_template, context, object_stats_values)
+                 .ToLocal(&object_stats_object)) {
+          return {};
+        }
         object_statistics_array.emplace_back(object_stats_object);
       }
 
@@ -417,8 +421,12 @@ static MaybeLocal<Object> ConvertHeapStatsToJSObject(
           Array::New(isolate,
                      object_statistics_array.data(),
                      object_statistics_array.size())};
-      page_statistics_array.emplace_back(
-          page_stats_tmpl->NewInstance(context, page_stats_values));
+      Local<Object> page_stats_object;
+      if (!CheckedDictionaryInstance(
+               page_stats_tmpl, context, page_stats_values)
+               .ToLocal(&page_stats_object)) {
+        return {};
+      }
     }
 
     // Free List Statistics
@@ -456,8 +464,13 @@ static MaybeLocal<Object> ConvertHeapStatsToJSObject(
                    page_statistics_array.size()),
         free_list_statistics_obj,
     };
-    space_statistics_array.emplace_back(
-        space_stats_tmpl->NewInstance(context, space_stats_values));
+    Local<Object> space_stats_object;
+    if (!CheckedDictionaryInstance(
+             space_stats_tmpl, context, space_stats_values)
+             .ToLocal(&space_stats_object)) {
+      return {};
+    }
+    space_statistics_array.emplace_back(space_stats_object);
   }
 
   Local<Value> type_names_value;
@@ -476,8 +489,8 @@ static MaybeLocal<Object> ConvertHeapStatsToJSObject(
                  space_statistics_array.data(),
                  space_statistics_array.size()),
       type_names_value};
-
-  return heap_stats_tmpl->NewInstance(context, heap_statistics_values);
+  return CheckedDictionaryInstance(
+      heap_stats_tmpl, context, heap_statistics_values);
 }
 
 static void GetCppHeapStatistics(const FunctionCallbackInfo<Value>& args) {
