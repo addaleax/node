@@ -2259,7 +2259,6 @@ void StatementSync::Columns(const FunctionCallbackInfo<Value>& args) {
     sqlite_column_template = DictionaryTemplate::New(isolate, col_keys);
     env->set_sqlite_column_template(sqlite_column_template);
   }
-  Local<Value> value;
 
   cols.reserve(num_cols);
   for (int i = 0; i < num_cols; ++i) {

@@ -61,7 +61,6 @@ using v8::FunctionTemplate;
 using v8::Global;
 using v8::Isolate;
 using v8::Local;
-using v8::LocalVector;
 using v8::MaybeLocal;
 using v8::Name;
 using v8::NewStringType;

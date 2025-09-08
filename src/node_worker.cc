@@ -38,7 +38,6 @@ using v8::Local;
 using v8::Locker;
 using v8::Maybe;
 using v8::MaybeLocal;
-using v8::Name;
 using v8::NewStringType;
 using v8::Null;
 using v8::Number;
@@ -1116,8 +1115,6 @@ void Worker::GetHeapStatistics(const FunctionCallbackInfo<Value>& args) {
               Number::New(isolate, heap_stats->total_global_handles_size()),
               Number::New(isolate, heap_stats->used_global_handles_size()),
               Number::New(isolate, heap_stats->external_memory())};
-
-          DCHECK_EQ(arraysize(heap_stats_names), arraysize(heap_stats_values));
 
           Local<Value> args[] = {
               tmpl->NewInstance(env->context(), heap_stats_values)};
