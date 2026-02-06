@@ -3,13 +3,14 @@
 
 #if defined(NODE_WANT_INTERNALS) && NODE_WANT_INTERNALS
 
+#include <deque>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <variant>
 #include "env.h"
 #include "node_mutex.h"
 #include "v8.h"
-#include <deque>
-#include <string>
-#include <unordered_map>
-#include <set>
 
 namespace node {
 namespace worker {
@@ -122,6 +123,32 @@ class Message : public MemoryRetainer {
   friend class MessagePort;
 };
 
+// Most frequently, we pass messages using unique_ptrs, but for
+// BroadcastChannel, we need duplicates (i.e. shared_ptrs) of the
+// same message to be sent to multiple destinations.
+struct MessagePointer final
+    : std::variant<std::unique_ptr<Message>, std::shared_ptr<Message>> {
+  bool is_shared() const {
+    return std::holds_alternative<std::shared_ptr<Message>>(*this);
+  }
+
+  MessagePointer() : variant(std::unique_ptr<Message>()) {}
+  MessagePointer(std::unique_ptr<Message>&& p) : variant(std::move(p)) {}
+  MessagePointer(std::shared_ptr<Message>&& p) : variant(std::move(p)) {}
+  Message* operator->() {
+    return std::visit([](auto&& p) { return p.get(); }, *this);
+  }
+  const Message* operator->() const {
+    return std::visit([](auto&& p) { return p.get(); }, *this);
+  }
+  Message& operator*() {
+    return *std::visit([](auto&& p) { return p.get(); }, *this);
+  }
+  const Message& operator*() const {
+    return *std::visit([](auto&& p) { return p.get(); }, *this);
+  }
+};
+
 class SiblingGroup final : public std::enable_shared_from_this<SiblingGroup> {
  public:
   // Named SiblingGroup, Used for one-to-many BroadcastChannels.
@@ -140,10 +167,9 @@ class SiblingGroup final : public std::enable_shared_from_this<SiblingGroup> {
   // if there were no destinations. Returns Nothing<bool>()
   // if there was an error. If error is not nullptr, it will
   // be set to an error message or warning message as appropriate.
-  v8::Maybe<bool> Dispatch(
-      MessagePortData* source,
-      std::shared_ptr<Message> message,
-      std::string* error = nullptr);
+  v8::Maybe<bool> Dispatch(MessagePortData* source,
+                           MessagePointer message,
+                           std::string* error = nullptr);
 
   void Entangle(MessagePortData* data);
   void Entangle(std::initializer_list<MessagePortData*> data);
@@ -181,10 +207,9 @@ class MessagePortData : public TransferData {
 
   // Add a message to the incoming queue and notify the receiver.
   // This may be called from any thread.
-  void AddToIncomingQueue(std::shared_ptr<Message> message);
-  v8::Maybe<bool> Dispatch(
-      std::shared_ptr<Message> message,
-      std::string* error = nullptr);
+  void AddToIncomingQueue(MessagePointer message);
+  v8::Maybe<bool> Dispatch(MessagePointer message,
+                           std::string* error = nullptr);
 
   // Turns `a` and `b` into siblings, i.e. connects the sending side of one
   // to the receiving side of the other. This is not thread-safe.
@@ -209,10 +234,7 @@ class MessagePortData : public TransferData {
   // This mutex protects all fields below it, with the exception of
   // sibling_.
   mutable Mutex mutex_;
-  // TODO(addaleax): Make this a std::variant<std::shared_ptr, std::unique_ptr>
-  // once that is available with C++17, because std::shared_ptr comes with
-  // overhead that is only necessary for BroadcastChannel.
-  std::deque<std::shared_ptr<Message>> incoming_messages_;
+  std::deque<MessagePointer> incoming_messages_;
   MessagePort* owner_ = nullptr;
   std::shared_ptr<SiblingGroup> group_;
   friend class MessagePort;

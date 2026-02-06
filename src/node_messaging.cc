@@ -632,7 +632,7 @@ void MessagePortData::MemoryInfo(MemoryTracker* tracker) const {
   tracker->TrackField("incoming_messages", incoming_messages_);
 }
 
-void MessagePortData::AddToIncomingQueue(std::shared_ptr<Message> message) {
+void MessagePortData::AddToIncomingQueue(MessagePointer message) {
   // This function will be called by other threads.
   Mutex::ScopedLock lock(mutex_);
   incoming_messages_.emplace_back(std::move(message));
@@ -772,7 +772,7 @@ MessagePort* MessagePort::New(
 MaybeLocal<Value> MessagePort::ReceiveMessage(Local<Context> context,
                                               MessageProcessingMode mode,
                                               Local<Value>* port_list) {
-  std::shared_ptr<Message> received;
+  MessagePointer received;
   {
     // Get the head of the message queue.
     Mutex::ScopedLock lock(data_->mutex_);
@@ -788,11 +788,11 @@ MaybeLocal<Value> MessagePort::ReceiveMessage(Local<Context> context,
     //   receive is not the final "close" message.
     if (data_->incoming_messages_.empty() ||
         (!wants_message &&
-         !data_->incoming_messages_.front()->IsCloseMessage())) {
+         data_->incoming_messages_.front()->IsCloseMessage())) {
       return env()->no_message_symbol();
     }
 
-    received = data_->incoming_messages_.front();
+    received = std::move(data_->incoming_messages_.front());
     data_->incoming_messages_.pop_front();
   }
 
@@ -935,7 +935,7 @@ Maybe<bool> MessagePort::PostMessage(Environment* env,
   Local<Object> obj = object(isolate);
   TryCatchScope try_catch(env);
 
-  std::shared_ptr<Message> msg = std::make_shared<Message>();
+  std::unique_ptr<Message> msg = std::make_unique<Message>();
 
   // Per spec, we need to both check if transfer list has the source port, and
   // serialize the input message, even if the MessagePort is closed or detached.
@@ -953,7 +953,7 @@ Maybe<bool> MessagePort::PostMessage(Environment* env,
   }
 
   std::string error;
-  Maybe<bool> res = data_->Dispatch(msg, &error);
+  Maybe<bool> res = data_->Dispatch(std::move(msg), &error);
   if (res.IsNothing())
     return res;
 
@@ -963,15 +963,14 @@ Maybe<bool> MessagePort::PostMessage(Environment* env,
   return res;
 }
 
-Maybe<bool> MessagePortData::Dispatch(
-    std::shared_ptr<Message> message,
-    std::string* error) {
+Maybe<bool> MessagePortData::Dispatch(MessagePointer message,
+                                      std::string* error) {
   if (!group_) {
     if (error != nullptr)
       *error = "MessagePortData is not entangled.";
     return Nothing<bool>();
   }
-  return group_->Dispatch(this, message, error);
+  return group_->Dispatch(this, std::move(message), error);
 }
 
 static Maybe<bool> ReadIterable(Environment* env,
@@ -1512,11 +1511,9 @@ SiblingGroup::~SiblingGroup() {
     CheckSiblingGroup(name_);
 }
 
-Maybe<bool> SiblingGroup::Dispatch(
-    MessagePortData* source,
-    std::shared_ptr<Message> message,
-    std::string* error) {
-
+Maybe<bool> SiblingGroup::Dispatch(MessagePortData* source,
+                                   MessagePointer message,
+                                   std::string* error) {
   RwLock::ScopedReadLock lock(group_mutex_);
 
   // The source MessagePortData is not part of this group.
@@ -1530,12 +1527,21 @@ Maybe<bool> SiblingGroup::Dispatch(
   if (size() <= 1)
     return Just(false);
 
+  const bool is_multi_destination = size() > 2;
+
   // Transferables cannot be used when there is more
   // than a single destination.
-  if (size() > 2 && message->has_transferables()) {
+  if (is_multi_destination && message->has_transferables()) {
     if (error != nullptr)
       *error = "Transferables cannot be used with multiple destinations.";
     return Nothing<bool>();
+  }
+
+  if (is_multi_destination && !message.is_shared()) {
+    // Ensure that `message` is always wrapping a std::shared_ptr
+    message = std::shared_ptr<Message>(
+        std::move(std::get<std::unique_ptr<Message>>(message)));
+    CHECK(message.is_shared());
   }
 
   for (MessagePortData* port : ports_) {
@@ -1551,7 +1557,7 @@ Maybe<bool> SiblingGroup::Dispatch(
         return Just(true);
       }
     }
-    port->AddToIncomingQueue(message);
+    port->AddToIncomingQueue(std::move(message));
   }
 
   return Just(true);
@@ -1576,10 +1582,10 @@ void SiblingGroup::Disentangle(MessagePortData* data) {
   ports_.erase(data);
   data->group_.reset();
 
-  data->AddToIncomingQueue(std::make_shared<Message>());
+  data->AddToIncomingQueue(std::make_unique<Message>());
   // If this is an anonymous group and there's another port, close it.
   if (size() == 1 && name_.empty())
-    (*(ports_.begin()))->AddToIncomingQueue(std::make_shared<Message>());
+    (*(ports_.begin()))->AddToIncomingQueue(std::make_unique<Message>());
 }
 
 SiblingGroup::Map SiblingGroup::groups_;
@@ -1619,11 +1625,11 @@ static void StructuredClone(const FunctionCallbackInfo<Value>& args) {
     }
   }
 
-  std::shared_ptr<Message> msg = std::make_shared<Message>();
+  Message msg;
   Local<Value> result;
-  if (msg->Serialize(env, context, value, transfer_list, Local<Object>())
+  if (msg.Serialize(env, context, value, transfer_list, Local<Object>())
           .IsNothing() ||
-      !msg->Deserialize(env, context, nullptr).ToLocal(&result)) {
+      !msg.Deserialize(env, context, nullptr).ToLocal(&result)) {
     return;
   }
   args.GetReturnValue().Set(result);
