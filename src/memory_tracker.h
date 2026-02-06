@@ -211,6 +211,10 @@ class MemoryTracker {
                          const std::queue<T>& value,
                          const char* node_name = nullptr,
                          const char* element_name = nullptr);
+  template <typename... T>
+  inline void TrackField(const char* edge_name,
+                         const std::variant<T...>& value,
+                         const char* node_name = nullptr);
   template <typename T, typename U>
   inline void TrackField(const char* edge_name,
                          const std::pair<T, U>& value,

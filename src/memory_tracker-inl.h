@@ -211,6 +211,13 @@ void MemoryTracker::TrackField(const char* edge_name,
   AdjustCurrentNodeSize(static_cast<int>(sizeof(T)));
 }
 
+template <typename... T>
+void MemoryTracker::TrackField(const char* edge_name,
+                               const std::variant<T...>& value,
+                               const char* node_name) {
+  std::visit([&](auto&& val) { TrackField(edge_name, val, node_name); }, value);
+}
+
 template <typename T, typename U>
 void MemoryTracker::TrackField(const char* edge_name,
                                const std::pair<T, U>& value,
