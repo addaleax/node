@@ -175,7 +175,7 @@ void BaseObjectList::Cleanup() {
 
 void BaseObjectList::MemoryInfo(node::MemoryTracker* tracker) const {
   for (auto bo : *this) {
-    if (bo->IsDoneInitializing()) tracker->Track(bo);
+    if (bo->IsDoneInitializing() && !bo->IsWeakOrDetached()) tracker->Track(bo);
   }
 }
 

@@ -49,15 +49,10 @@ class CppgcWrapperListNode {
  */
 class CppgcWrapperList
     : public ListHead<CppgcWrapperListNode,
-                      &CppgcWrapperListNode::wrapper_list_node>,
-      public MemoryRetainer {
+                      &CppgcWrapperListNode::wrapper_list_node> {
  public:
   void Cleanup();
   void PurgeEmpty();
-
-  SET_MEMORY_INFO_NAME(CppgcWrapperList)
-  SET_SELF_SIZE(CppgcWrapperList)
-  void MemoryInfo(MemoryTracker* tracker) const override;
 };
 
 /**

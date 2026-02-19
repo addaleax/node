@@ -54,7 +54,6 @@ void Realm::MemoryInfo(MemoryTracker* tracker) const {
 #undef V
 
   tracker->TrackField("base_object_list", base_object_list_);
-  tracker->TrackField("cppgc_wrapper_list", cppgc_wrapper_list_);
   tracker->TrackField("builtins_with_cache", builtins_with_cache);
   tracker->TrackField("builtins_without_cache", builtins_without_cache);
 }

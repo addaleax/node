@@ -12,15 +12,6 @@ void CppgcWrapperList::Cleanup() {
   }
 }
 
-void CppgcWrapperList::MemoryInfo(MemoryTracker* tracker) const {
-  for (auto node : *this) {
-    CppgcMixin* ptr = node->persistent.Get();
-    if (ptr != nullptr) {
-      tracker->Track(ptr);
-    }
-  }
-}
-
 void CppgcWrapperList::PurgeEmpty() {
   for (auto weak_it = begin(); weak_it != end();) {
     CppgcWrapperListNode* node = *weak_it;
