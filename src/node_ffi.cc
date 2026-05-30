@@ -420,10 +420,10 @@ void DynamicLibrary::InvokeFunction(const FunctionCallbackInfo<Value>& args) {
     return;
   }
 
-  std::vector<uint64_t> values(expected_args, 0);
-  std::vector<void*> ffi_args(expected_args, nullptr);
-  std::vector<std::string> strings;
-  strings.reserve(expected_args);
+  MaybeStackBuffer<uint64_t> values(expected_args);
+  MaybeStackBuffer<void*> ffi_args(expected_args);
+  MaybeStackBuffer<FFIArgumentCategory> arg_categories(expected_args);
+  std::string string_storage;
 
   for (unsigned int i = 0; i < expected_args; i++) {
     FFIArgumentCategory res;
@@ -431,6 +431,7 @@ void DynamicLibrary::InvokeFunction(const FunctionCallbackInfo<Value>& args) {
     if (!ToFFIArgument(env, i, fn->args[i], args[i], &values[i]).To(&res)) {
       return;
     }
+    arg_categories[i] = res;
 
     // The argument is a string, we need to copy
     if (res == FFIArgumentCategory::String) {
@@ -441,29 +442,39 @@ void DynamicLibrary::InvokeFunction(const FunctionCallbackInfo<Value>& args) {
         return;
       }
 
-      if (ThrowIfContainsNullBytes(env, str, "Argument " + std::to_string(i))) {
+      auto sv = str.ToStringView();
+      if (sv.find('\0') != std::string_view::npos) {
+        THROW_ERR_INVALID_ARG_VALUE(env, "Argument %s must not contain null bytes", i);
         return;
       }
 
-      strings.push_back(*str);
-      values[i] = reinterpret_cast<uint64_t>(strings.back().c_str());
-      ffi_args[i] = &values[i];
-    } else {
-      ffi_args[i] = &values[i];
+      values[i] = string_storage.size();
+      string_storage += sv;
+      string_storage += '\0';
+    }
+    ffi_args[i] = &values[i];
+  }
+
+  // Second pass after all allocations are done,
+  // convert the offsets for strings stored in `values`
+  // to actual pointers into `string_storage`.
+  auto string_storage_base = reinterpret_cast<uint64_t>(string_storage.data());
+  for (unsigned int i = 0; i < expected_args; i++) {
+    if (arg_categories[i] == FFIArgumentCategory::String) {
+      values[i] += string_storage_base;
     }
   }
 
-  void* result = nullptr;
+  MaybeStackBuffer<uint8_t> result;
 
   if (fn->return_type->type != FFI_TYPE_VOID) {
-    result = Malloc(GetFFIReturnValueStorageSize(fn->return_type));
+    result.AllocateSufficientStorage(GetFFIReturnValueStorageSize(fn->return_type));
   }
 
-  ffi_call(&fn->cif, FFI_FN(fn->ptr), result, ffi_args.data());
+  ffi_call(&fn->cif, FFI_FN(fn->ptr), result.out(), ffi_args.out());
 
   // Return result back to Javascript
-  ToJSReturnValue(env, args, fn->return_type, result);
-  free(result);
+  ToJSReturnValue(env, args, fn->return_type, result.out());
 }
 
 void DynamicLibrary::InvokeFunctionSB(const FunctionCallbackInfo<Value>& args) {
@@ -501,8 +512,8 @@ void DynamicLibrary::InvokeFunctionSB(const FunctionCallbackInfo<Value>& args) {
 
   // Layout is 8 bytes per slot. The return value lives at offset 0 and
   // argument i lives at offset 8*(i+1).
-  std::vector<uint64_t> values(nargs, 0);
-  std::vector<void*> ffi_args(nargs, nullptr);
+  MaybeStackBuffer<uint64_t> values(nargs);
+  MaybeStackBuffer<void*> ffi_args(nargs);
 
   for (unsigned int i = 0; i < nargs; i++) {
     ReadFFIArgFromBuffer(fn->args[i], buffer, 8 * (i + 1), &values[i]);
@@ -518,7 +529,7 @@ void DynamicLibrary::InvokeFunctionSB(const FunctionCallbackInfo<Value>& args) {
   alignas(8) uint8_t result_storage[kSBResultStorageSize] = {0};
   void* result = (fn->return_type != &ffi_type_void) ? result_storage : nullptr;
 
-  ffi_call(&fn->cif, FFI_FN(fn->ptr), result, ffi_args.data());
+  ffi_call(&fn->cif, FFI_FN(fn->ptr), result, ffi_args.out());
 
   if (result != nullptr) {
     WriteFFIReturnToBuffer(fn->return_type, result, buffer, 0);
