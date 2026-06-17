@@ -1986,10 +1986,31 @@ EnvSerializeInfo Environment::Serialize(SnapshotCreator* creator) {
       should_abort_on_uncaught_toggle_.Serialize(ctx, creator);
 
   info.principal_realm = principal_realm_->Serialize(creator);
-  // For now we only support serialization of the main context.
-  // TODO(joyeecheung): support de/serialization of vm contexts.
-  CHECK_EQ(contexts_.size(), 1);
-  CHECK_EQ(contexts_[0], context());
+
+  // The main context is always serialized. In addition, user-created vm
+  // contexts (node::contextify::ContextifyContext) that are still alive are
+  // included in the snapshot; they are collected and added to the snapshot in
+  // SnapshotBuilder::CreateSnapshot(). Any other kind of additional context
+  // (e.g. ShadowRealm contexts) is not supported yet.
+  PurgeTrackedEmptyContexts();
+  bool found_main_context = false;
+  for (const v8::Global<Context>& global : contexts_) {
+    Local<Context> tracked = PersistentToLocal::Weak(isolate_, global);
+    if (tracked.IsEmpty()) {
+      continue;
+    }
+    if (tracked == ctx) {
+      found_main_context = true;
+      continue;
+    }
+    // Only contextify (vm) contexts can be serialized alongside the main
+    // context for now.
+    CHECK(ContextEmbedderTag::IsNodeContext(tracked));
+    CHECK_NOT_NULL(tracked->GetAlignedPointerFromEmbedderData(
+        ContextEmbedderIndex::kContextifyContext,
+        EmbedderDataTag::kPerContextData));
+  }
+  CHECK(found_main_context);
   return info;
 }
 
@@ -2027,6 +2048,30 @@ void Environment::DeserializeProperties(const EnvSerializeInfo* info) {
   // Deserialize the realm's properties before running the deserialize
   // requests as the requests may need to access the realm's properties.
   principal_realm_->DeserializeProperties(&info->principal_realm);
+
+  // Restore the user-created vm contexts that were included in the snapshot.
+  // Each context is deserialized from its snapshot index and its native
+  // ContextifyContext object is recreated. The deserialized contexts are kept
+  // alive by the snapshotted object graph (the sandbox object referenced from
+  // user land holds a private reference to the wrapper, which keeps the vm
+  // context alive).
+  for (SnapshotIndex idx : info->contextify_contexts) {
+    Local<Context> vm_context =
+        Context::FromSnapshot(
+            isolate_,
+            idx,
+            v8::DeserializeInternalFieldsCallback(DeserializeNodeInternalFields,
+                                                  this),
+            nullptr,
+            MaybeLocal<Value>(),
+            nullptr,
+            v8::DeserializeContextDataCallback(DeserializeNodeContextData, this),
+            v8::DeserializeAPIWrapperCallback(DeserializeNodeContextAPIWrapper,
+                                              this))
+            .ToLocalChecked();
+    contextify::ContextifyContext::InitializeFromSnapshot(this, vm_context);
+  }
+
   RunDeserializeRequests();
 
   async_hooks_.Deserialize(ctx);

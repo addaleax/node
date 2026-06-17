@@ -459,7 +459,9 @@ Environment* CreateEnvironment(
                                     MaybeLocal<Value>(),
                                     nullptr,
                                     v8::DeserializeContextDataCallback(
-                                        DeserializeNodeContextData, env))
+                                        DeserializeNodeContextData, env),
+                                    v8::DeserializeAPIWrapperCallback(
+                                        DeserializeNodeContextAPIWrapper, env))
                   .ToLocalChecked();
 
     CHECK(!context.IsEmpty());

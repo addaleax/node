@@ -501,6 +501,7 @@ EnvSerializeInfo SnapshotDeserializer::Read() {
   result.stream_base_state = ReadArithmetic<AliasedBufferIndex>();
   result.should_abort_on_uncaught_toggle = ReadArithmetic<AliasedBufferIndex>();
   result.principal_realm = Read<RealmSerializeInfo>();
+  result.contextify_contexts = ReadVector<SnapshotIndex>();
   return result;
 }
 
@@ -523,6 +524,7 @@ size_t SnapshotSerializer::Write(const EnvSerializeInfo& data) {
   written_total +=
       WriteArithmetic<AliasedBufferIndex>(data.should_abort_on_uncaught_toggle);
   written_total += Write<RealmSerializeInfo>(data.principal_realm);
+  written_total += WriteVector<SnapshotIndex>(data.contextify_contexts);
 
   Debug("Write<EnvSerializeInfo>() wrote %d bytes\n", written_total);
   return written_total;
@@ -1239,8 +1241,55 @@ ExitCode SnapshotBuilder::CreateSnapshot(SnapshotData* out,
         main_context,
         v8::SerializeInternalFieldsCallback(SerializeNodeContextInternalFields,
                                             env),
-        v8::SerializeContextDataCallback(SerializeNodeContextData, env));
+        v8::SerializeContextDataCallback(SerializeNodeContextData, env),
+        v8::SerializeAPIWrapperCallback(SerializeNodeContextAPIWrapper, env));
     CHECK_EQ(index, SnapshotData::kNodeMainContextIndex);
+
+    // Include any user-created vm contexts (node::contextify::ContextifyContext)
+    // that are still alive into the snapshot. They are identified among the
+    // contexts tracked by the Environment by having a non-null
+    // kContextifyContext embedder pointer. Their snapshot indices are recorded
+    // in env_info so that they can be restored in
+    // Environment::DeserializeProperties().
+    out->env_info.contextify_contexts.clear();
+    for (const v8::Global<Context>& global : env->contexts()) {
+      if (global.IsEmpty()) {
+        continue;
+      }
+      Local<Context> vm_ctx = PersistentToLocal::Weak(isolate, global);
+      if (vm_ctx.IsEmpty() || vm_ctx == main_context ||
+          !ContextEmbedderTag::IsNodeContext(vm_ctx)) {
+        continue;
+      }
+      void* ctxify_ptr = vm_ctx->GetAlignedPointerFromEmbedderData(
+          ContextEmbedderIndex::kContextifyContext,
+          EmbedderDataTag::kPerContextData);
+      if (ctxify_ptr == nullptr) {
+        continue;
+      }
+      contextify::ContextifyContext* ctxify =
+          static_cast<contextify::ContextifyContext*>(ctxify_ptr);
+      size_t vm_index = creator->AddContext(
+          vm_ctx,
+          v8::SerializeInternalFieldsCallback(
+              SerializeNodeContextInternalFields, env),
+          v8::SerializeContextDataCallback(SerializeNodeContextData, env),
+          v8::SerializeAPIWrapperCallback(SerializeNodeContextAPIWrapper, env));
+      // Register the context object itself as snapshot data so that the global
+      // handles referencing it (e.g. the Environment's weakly tracked context
+      // list and the ContextifyContext's TracedReference) are accounted for by
+      // V8's SerializedHandleChecker, the same way the main context is
+      // registered in node::Realm::Serialize().
+      creator->AddData(vm_ctx, vm_ctx);
+      // Detach the native ContextifyContext object and its wrapper from the
+      // context before serialization; they are recreated on deserialization
+      // by ContextifyContext::InitializeFromSnapshot().
+      ctxify->PrepareForSnapshot();
+      per_process::Debug(DebugCategory::MKSNAPSHOT,
+                         "Adding vm context to snapshot at index=%d\n",
+                         static_cast<int>(vm_index));
+      out->env_info.contextify_contexts.push_back(vm_index);
+    }
   }
 
   // Must be out of HandleScope
@@ -1391,6 +1440,25 @@ StartupData SerializeNodeContextData(Local<Context> holder,
   }
 }
 
+StartupData SerializeNodeContextAPIWrapper(Local<Object> holder,
+                                           void* cpp_heap_pointer,
+                                           void* callback_data) {
+  // cppgc-managed native objects (currently only
+  // contextify::ContextifyContext) are not serialized directly. They are
+  // reconstructed after deserialization from the wrapper's internal fields
+  // (see SerializeNodeContextInternalFields() and
+  // contextify::ContextifyContext::Deserialize()). Returning empty data here
+  // tells V8 to leave the API wrapper pointer empty in the snapshot; the
+  // native object's pointer is re-established during reconstruction.
+  return StartupData{nullptr, 0};
+}
+
+void DeserializeNodeContextAPIWrapper(Local<Object> holder,
+                                      StartupData payload,
+                                      void* callback_data) {
+  // No-op. See SerializeNodeContextAPIWrapper().
+}
+
 void DeserializeNodeInternalFields(Local<Object> holder,
                                    int index,
                                    StartupData payload,
@@ -1469,7 +1537,8 @@ StartupData SerializeNodeContextInternalFields(Local<Object> holder,
 
   // Use the V8 convention and serialize unknown objects verbatim.
   Environment* env = static_cast<Environment*>(callback_data);
-  if (!BaseObject::IsBaseObject(env->isolate_data(), holder)) {
+  IsolateData* isolate_data = env->isolate_data();
+  if (!BaseObject::IsBaseObject(isolate_data, holder)) {
     per_process::Debug(DebugCategory::MKSNAPSHOT,
                        "Serialize unknown object, index=%d, holder=%p\n",
                        static_cast<int>(index),

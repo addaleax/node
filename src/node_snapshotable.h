@@ -138,6 +138,12 @@ void DeserializeNodeContextData(v8::Local<v8::Context> holder,
                                 int index,
                                 v8::StartupData payload,
                                 void* env);
+v8::StartupData SerializeNodeContextAPIWrapper(v8::Local<v8::Object> holder,
+                                               void* cpp_heap_pointer,
+                                               void* env);
+void DeserializeNodeContextAPIWrapper(v8::Local<v8::Object> holder,
+                                      v8::StartupData payload,
+                                      void* env);
 void SerializeSnapshotableObjects(Realm* realm,
                                   v8::SnapshotCreator* creator,
                                   RealmSerializeInfo* info);

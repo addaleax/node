@@ -33,6 +33,7 @@
 #include "node_process.h"
 #include "node_sea.h"
 #include "node_snapshot_builder.h"
+#include "node_snapshotable.h"
 #include "node_url.h"
 #include "node_watchdog.h"
 #include "util-inl.h"
@@ -350,6 +351,93 @@ ContextifyContext* ContextifyContext::New(Local<Context> v8_context,
     return {};
   }
   return result;
+}
+
+void ContextifyContext::PrepareForSnapshot() {
+  // The native ContextifyContext object is cppgc-managed and its wrapper object
+  // is a JS API object backed by an object template. Because the wrapper is
+  // reachable from the sandbox object (which is typically shared with the main
+  // context's object graph), it - and the template subtree behind it - would
+  // end up in V8's startup snapshot partition, where the per-context embedder
+  // serialization callbacks do not apply and embedder pointers would be
+  // serialized verbatim. Instead of serializing the wrapper and the native
+  // object, detach them here so that only the plain sandbox object and the vm
+  // v8::Context end up in the snapshot. The wrapper and the native object are
+  // recreated from scratch by InitializeFromSnapshot() after deserialization.
+  HandleScope scope(env()->isolate());
+  Local<Context> v8_context = context();
+
+  Local<Value> sandbox =
+      v8_context->GetEmbedderData(ContextEmbedderIndex::kSandboxObject);
+  Local<Object> wrapper_holder =
+      sandbox->IsUndefined() ? v8_context->Global() : sandbox.As<Object>();
+  // Remove the reference from the wrapper holder to the wrapper object so that
+  // the wrapper (and the native object it keeps alive) becomes unreachable and
+  // is collected before the snapshot is created.
+  USE(wrapper_holder->DeletePrivate(
+      v8_context, env()->contextify_context_private_symbol()));
+
+  // The kContextifyContext pointer would otherwise dangle once the native
+  // object is collected. It is restored by InitializeFromSnapshot().
+  v8_context->SetAlignedPointerInEmbedderData(
+      ContextEmbedderIndex::kContextifyContext,
+      nullptr,
+      EmbedderDataTag::kPerContextData);
+
+  // The security token is shared with the main context (it is the main
+  // context's global object). Keeping it would make the vm context strongly
+  // reference the entire main context object graph during serialization,
+  // pulling it (and embedder-specific objects that cannot be serialized
+  // verbatim) into V8's shared startup snapshot partition. Reset it to the vm
+  // context's own default token here; it is re-established by
+  // InitializeFromSnapshot() via ContextifyContext::New().
+  v8_context->UseDefaultSecurityToken();
+}
+
+// static
+void ContextifyContext::InitializeFromSnapshot(Environment* env,
+                                               Local<Context> v8_context) {
+  Isolate* isolate = env->isolate();
+  HandleScope scope(isolate);
+
+  // Reconstruct the ContextOptions from the state captured in the snapshotted
+  // vm context, then re-run the same initialization that a freshly created
+  // context goes through (ContextifyContext::New()). This recreates the wrapper
+  // object, the native ContextifyContext, and the sandbox <-> wrapper linkage.
+  Local<Value> sandbox_val =
+      v8_context->GetEmbedderData(ContextEmbedderIndex::kSandboxObject);
+  Local<Object> sandbox_obj;
+
+  ContextOptions options;
+  options.vanilla = sandbox_val->IsUndefined();
+  if (!options.vanilla) {
+    sandbox_obj = sandbox_val.As<Object>();
+  }
+  options.name = FIXED_ONE_BYTE_STRING(isolate, "VM Context");
+  options.allow_code_gen_strings =
+      v8_context
+          ->GetEmbedderData(
+              ContextEmbedderIndex::kAllowCodeGenerationFromStrings)
+          ->ToBoolean(isolate);
+  options.allow_code_gen_wasm =
+      v8_context
+          ->GetEmbedderData(ContextEmbedderIndex::kAllowWasmCodeGeneration)
+          ->ToBoolean(isolate);
+
+  // Recover the host-defined options id (used for dynamic import) that was
+  // stored as a private symbol on the context's global object.
+  Local<Object> global = v8_context->Global();
+  Local<Value> host_defined_options_id;
+  if (global->GetPrivate(v8_context, env->host_defined_option_symbol())
+          .ToLocal(&host_defined_options_id) &&
+      host_defined_options_id->IsSymbol()) {
+    options.host_defined_options_id = host_defined_options_id.As<Symbol>();
+  } else {
+    options.host_defined_options_id = Symbol::New(isolate);
+  }
+
+  ContextifyContext* result = New(v8_context, env, sandbox_obj, &options);
+  CHECK_NOT_NULL(result);
 }
 
 void ContextifyContext::CreatePerIsolateProperties(

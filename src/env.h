@@ -532,6 +532,10 @@ struct EnvSerializeInfo {
   AliasedBufferIndex should_abort_on_uncaught_toggle;
 
   RealmSerializeInfo principal_realm;
+  // Snapshot indices (as returned by v8::SnapshotCreator::AddContext()) of the
+  // user-created vm contexts (node::contextify::ContextifyContext) included in
+  // the snapshot.
+  std::vector<SnapshotIndex> contextify_contexts;
   friend std::ostream& operator<<(std::ostream& o, const EnvSerializeInfo& i);
 };
 
@@ -696,6 +700,13 @@ class Environment final : public MemoryRetainer {
   void UnassignFromContext(v8::Local<v8::Context> context);
   void TrackShadowRealm(shadow_realm::ShadowRealm* realm);
   void UntrackShadowRealm(shadow_realm::ShadowRealm* realm);
+
+  // The (weakly tracked) v8::Contexts associated with this Environment. This is
+  // used when building a snapshot to discover user-created vm contexts that
+  // should be included in it.
+  inline const std::vector<v8::Global<v8::Context>>& contexts() const {
+    return contexts_;
+  }
 
   void StartProfilerIdleNotifier();
 

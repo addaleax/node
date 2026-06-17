@@ -79,6 +79,18 @@ class ContextifyContext final : CPPGC_MIXIN(ContextifyContext) {
   void Trace(cppgc::Visitor* visitor) const final;
   SET_NO_MEMORY_INFO()
 
+  // Snapshot support. ContextifyContext is a cppgc-managed object and its
+  // wrapper object is shared between the vm context and the main context, so
+  // it cannot rely on the per-context internal-field (de)serialization
+  // callbacks. Instead, PrepareForSnapshot() detaches the native state from
+  // the wrapper before serialization, and InitializeFromSnapshot() recreates
+  // the native ContextifyContext object after the vm context is deserialized
+  // (see SnapshotBuilder::CreateSnapshot() and
+  // Environment::DeserializeProperties()).
+  void PrepareForSnapshot();
+  static void InitializeFromSnapshot(Environment* env,
+                                     v8::Local<v8::Context> v8_context);
+
   ContextifyContext(Environment* env,
                     v8::Local<v8::Object> wrapper,
                     v8::Local<v8::Context> v8_context,
